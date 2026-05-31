@@ -1,12 +1,13 @@
 {
-  "name": "@synthetic/reports",
-  "version": "0.1.0",
-  "private": false,
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "node -e \"console.log('No tests yet for @synthetic/reports')\""
-  }
+    "name":  "@synthetic/reports",
+    "version":  "0.1.0",
+    "private":  false,
+    "type":  "module",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "scripts":  {
+                    "build":  "tsc -p tsconfig.json",
+                    "test":  "node -e \"console.log(\u0027No tests yet for @synthetic/reports\u0027)\"",
+                    "typecheck":  "tsc --noEmit -p tsconfig.json"
+                }
 }
