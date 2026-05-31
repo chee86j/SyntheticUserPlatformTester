@@ -1,4 +1,11 @@
-import { EventSeverity, Prisma, PrismaClient, RunStatus } from "@prisma/client";
+import {
+  EnvironmentStatus,
+  EnvironmentType,
+  EventSeverity,
+  Prisma,
+  PrismaClient,
+  RunStatus
+} from "@prisma/client";
 
 export type PlatformRole = "OWNER" | "ADMIN" | "TESTER" | "VIEWER";
 
@@ -19,6 +26,33 @@ export type EventCreateInput = {
   type: string;
   message: string;
   metadata?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+};
+
+export type ProjectCreateInput = {
+  organizationId: string;
+  name: string;
+};
+
+export type ProjectUpdateInput = {
+  name?: string;
+};
+
+export type EnvironmentCreateInput = {
+  organizationId: string;
+  projectId: string;
+  name: string;
+  baseUrl: string;
+  type: EnvironmentType;
+  allowedDomains: string[];
+  status: EnvironmentStatus;
+};
+
+export type EnvironmentUpdateInput = {
+  name?: string;
+  baseUrl?: string;
+  type?: EnvironmentType;
+  allowedDomains?: string[];
+  status?: EnvironmentStatus;
 };
 
 const prisma = new PrismaClient();
@@ -73,7 +107,95 @@ export class ProjectRepository {
   async listByOrganization(organizationId: string) {
     return prisma.project.findMany({
       where: { organizationId },
+      include: { environments: true },
       orderBy: { createdAt: "asc" }
+    });
+  }
+
+  async findByIdForOrganization(projectId: string, organizationId: string) {
+    return prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+      include: { environments: true }
+    });
+  }
+
+  async create(input: ProjectCreateInput) {
+    return prisma.project.create({
+      data: {
+        organizationId: input.organizationId,
+        name: input.name
+      }
+    });
+  }
+
+  async updateForOrganization(projectId: string, organizationId: string, input: ProjectUpdateInput) {
+    return prisma.project.updateMany({
+      where: { id: projectId, organizationId },
+      data: input
+    });
+  }
+
+  async deleteForOrganization(projectId: string, organizationId: string) {
+    return prisma.project.deleteMany({
+      where: { id: projectId, organizationId }
+    });
+  }
+}
+
+export class EnvironmentRepository {
+  async listByProjectForOrganization(projectId: string, organizationId: string) {
+    return prisma.environment.findMany({
+      where: {
+        projectId,
+        organizationId
+      },
+      orderBy: { createdAt: "asc" }
+    });
+  }
+
+  async create(input: EnvironmentCreateInput) {
+    return prisma.environment.create({
+      data: input
+    });
+  }
+
+  async findByIdForProjectAndOrganization(
+    environmentId: string,
+    projectId: string,
+    organizationId: string
+  ) {
+    return prisma.environment.findFirst({
+      where: {
+        id: environmentId,
+        projectId,
+        organizationId
+      }
+    });
+  }
+
+  async updateForProjectAndOrganization(
+    environmentId: string,
+    projectId: string,
+    organizationId: string,
+    input: EnvironmentUpdateInput
+  ) {
+    return prisma.environment.updateMany({
+      where: {
+        id: environmentId,
+        projectId,
+        organizationId
+      },
+      data: input
+    });
+  }
+
+  async deleteForProjectAndOrganization(environmentId: string, projectId: string, organizationId: string) {
+    return prisma.environment.deleteMany({
+      where: {
+        id: environmentId,
+        projectId,
+        organizationId
+      }
     });
   }
 }

@@ -5,6 +5,12 @@ CREATE SCHEMA IF NOT EXISTS "public";
 CREATE TYPE "UserRole" AS ENUM ('OWNER', 'ADMIN', 'TESTER', 'VIEWER');
 
 -- CreateEnum
+CREATE TYPE "EnvironmentType" AS ENUM ('LOCAL', 'STAGING', 'DEMO');
+
+-- CreateEnum
+CREATE TYPE "EnvironmentStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'UNREACHABLE');
+
+-- CreateEnum
 CREATE TYPE "RunStatus" AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED');
 
 -- CreateEnum
@@ -61,6 +67,9 @@ CREATE TABLE "Environment" (
     "projectId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "baseUrl" TEXT NOT NULL,
+    "type" "EnvironmentType" NOT NULL,
+    "allowedDomains" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "status" "EnvironmentStatus" NOT NULL DEFAULT 'ACTIVE',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

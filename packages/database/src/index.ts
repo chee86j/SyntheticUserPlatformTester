@@ -5,7 +5,16 @@ export {
   EventRepository,
   UserRepository,
   ProjectRepository,
+  EnvironmentRepository,
   disconnectDatabaseClient
 } from "./repositories/index.js";
 
-export type { RunCreateInput, EventCreateInput, AuthenticatedUser } from "./repositories/index.js";
+export type {
+  RunCreateInput,
+  EventCreateInput,
+  AuthenticatedUser,
+  EnvironmentCreateInput,
+  EnvironmentUpdateInput,
+  ProjectCreateInput,
+  ProjectUpdateInput
+} from "./repositories/index.js";

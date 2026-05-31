@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 
@@ -19,7 +18,7 @@ async function main(): Promise<void> {
       organizationId: organization.id,
       email: "admin@syntheticlabs.local",
       name: "Platform Owner",
-      role: UserRole.OWNER,
+      role: "OWNER",
       passwordHash: adminPasswordHash
     }
   });
@@ -36,7 +35,10 @@ async function main(): Promise<void> {
       organizationId: organization.id,
       projectId: project.id,
       name: "staging",
-      baseUrl: "https://staging.example.local"
+      baseUrl: "https://staging.example.local",
+      type: "STAGING",
+      allowedDomains: ["staging.example.local"],
+      status: "ACTIVE"
     }
   });
 
@@ -99,4 +101,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
