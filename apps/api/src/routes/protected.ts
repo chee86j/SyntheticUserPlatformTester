@@ -1,5 +1,5 @@
-import { BudgetPolicyRepository, EnvironmentRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
-import { personaCreateSchema, personaUpdateSchema, runSetupSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
+import { BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { personaCreateSchema, personaUpdateSchema, runSetupSchema, simulationEventSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
@@ -13,6 +13,7 @@ const testAccountRepository = new TestAccountRepository();
 const workflowRepository = new WorkflowRepository();
 const runRepository = new RunRepository();
 const budgetPolicyRepository = new BudgetPolicyRepository();
+const eventRepository = new EventRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -45,6 +46,7 @@ const environmentParamsSchema = z.object({
 });
 
 const testConnectionBodySchema = z.object({ timeoutMs: z.number().int().positive().max(10000).optional() });
+const runIdParamsSchema = z.object({ runId: z.string().uuid() });
 
 function normalizeAllowedDomains(rawDomains: string[]): string[] {
   const normalized = rawDomains
@@ -889,4 +891,58 @@ protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) 
   });
 
   res.status(201).json({ run });
+});
+
+protectedRouter.post("/events", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = simulationEventSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid event payload" });
+
+  const run = await runRepository.getById(parsed.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  if (parsed.data.agentId) {
+    const agent = await runRepository.getAgentById(parsed.data.agentId);
+    if (!agent || agent.simulationRunId !== run.id) {
+      return void res.status(400).json({ error: "Agent does not belong to run" });
+    }
+  }
+
+  if (parsed.data.personaId) {
+    const persona = await personaRepository.findByIdForOrganization(parsed.data.personaId, user.organizationId);
+    if (!persona) return void res.status(400).json({ error: "Persona not found" });
+  }
+
+  const event = await eventRepository.create({
+    organizationId: user.organizationId,
+    runId: parsed.data.runId,
+    agentId: parsed.data.agentId,
+    personaId: parsed.data.personaId,
+    eventType: parsed.data.eventType,
+    severity: parsed.data.severity,
+    payload: parsed.data.payload,
+    timestamp: parsed.data.timestamp
+  });
+
+  res.status(201).json({ event });
+});
+
+protectedRouter.get("/runs/:runId/events", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const events = await eventRepository.listByRunForOrganization(params.data.runId, user.organizationId);
+  res.json({ events });
 });

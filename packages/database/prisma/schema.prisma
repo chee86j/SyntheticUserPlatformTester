@@ -272,17 +272,20 @@ model SimulationAgent {
 }
 
 model SimulationEvent {
-  id                String         @id @default(uuid())
-  organizationId    String
-  simulationRunId   String
-  simulationAgentId String?
-  severity          EventSeverity  @default(INFO)
-  type              String
-  message           String
-  metadata          Json?
-  createdAt         DateTime       @default(now())
-  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  simulationRun     SimulationRun  @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  organizationId  String
+  runId           String
+  agentId         String?
+  personaId       String?
+  eventType       String
+  severity        EventSeverity @default(INFO)
+  payload         Json
+  timestamp       DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulationRun   SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, timestamp])
 }
 
 model Artifact {

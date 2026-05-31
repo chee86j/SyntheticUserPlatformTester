@@ -201,12 +201,13 @@ CREATE TABLE "SimulationAgent" (
 CREATE TABLE "SimulationEvent" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
-    "simulationRunId" TEXT NOT NULL,
-    "simulationAgentId" TEXT,
+    "runId" TEXT NOT NULL,
+    "agentId" TEXT,
+    "personaId" TEXT,
+    "eventType" TEXT NOT NULL,
     "severity" "EventSeverity" NOT NULL DEFAULT 'INFO',
-    "type" TEXT NOT NULL,
-    "message" TEXT NOT NULL,
-    "metadata" JSONB,
+    "payload" JSONB NOT NULL,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "SimulationEvent_pkey" PRIMARY KEY ("id")
@@ -289,6 +290,9 @@ CREATE UNIQUE INDEX "TestAccount_environmentId_email_key" ON "TestAccount"("envi
 CREATE INDEX "TestAccountReservation_testAccountId_releasedAt_idx" ON "TestAccountReservation"("testAccountId", "releasedAt");
 
 -- CreateIndex
+CREATE INDEX "SimulationEvent_runId_timestamp_idx" ON "SimulationEvent"("runId", "timestamp");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "BudgetPolicy_organizationId_name_key" ON "BudgetPolicy"("organizationId", "name");
 
 -- AddForeignKey
@@ -352,7 +356,7 @@ ALTER TABLE "SimulationAgent" ADD CONSTRAINT "SimulationAgent_personaId_fkey" FO
 ALTER TABLE "SimulationEvent" ADD CONSTRAINT "SimulationEvent_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SimulationEvent" ADD CONSTRAINT "SimulationEvent_simulationRunId_fkey" FOREIGN KEY ("simulationRunId") REFERENCES "SimulationRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "SimulationEvent" ADD CONSTRAINT "SimulationEvent_runId_fkey" FOREIGN KEY ("runId") REFERENCES "SimulationRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Artifact" ADD CONSTRAINT "Artifact_simulationRunId_fkey" FOREIGN KEY ("simulationRunId") REFERENCES "SimulationRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;

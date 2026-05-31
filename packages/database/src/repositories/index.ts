@@ -13,7 +13,8 @@ import type {
   TestAccountCreateInput,
   TestAccountUpdateInput,
   WorkflowCreateInput,
-  WorkflowUpdateInput
+  WorkflowUpdateInput,
+  SimulationEventType
 } from "@synthetic/shared";
 import { canReserveAccount } from "./test-account-reservation.js";
 
@@ -34,13 +35,34 @@ export type RunCreateInput = {
 
 export type EventCreateInput = {
   organizationId: string;
-  simulationRunId: string;
-  simulationAgentId?: string;
+  runId: string;
+  agentId?: string;
+  personaId?: string;
+  eventType: SimulationEventType;
   severity?: EventSeverity;
-  type: string;
-  message: string;
-  metadata?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+  payload: unknown;
+  timestamp?: Date;
 };
+
+export function toSimulationEventCreateData(input: EventCreateInput) {
+  return {
+    organizationId: input.organizationId,
+    runId: input.runId,
+    agentId: input.agentId,
+    personaId: input.personaId,
+    eventType: input.eventType,
+    severity: input.severity ?? EventSeverity.INFO,
+    payload: input.payload as Prisma.InputJsonValue,
+    timestamp: input.timestamp ?? new Date()
+  };
+}
+
+export function toSimulationEventRunQuery(runId: string, organizationId: string) {
+  return {
+    where: { runId, organizationId },
+    orderBy: { timestamp: "asc" as const }
+  };
+}
 
 export type ProjectCreateInput = { organizationId: string; name: string };
 export type ProjectUpdateInput = { name?: string };
@@ -336,6 +358,10 @@ export class RunRepository {
   async getById(runId: string) {
     return prisma.simulationRun.findUnique({ where: { id: runId } });
   }
+
+  async getAgentById(agentId: string) {
+    return prisma.simulationAgent.findUnique({ where: { id: agentId } });
+  }
 }
 
 export class BudgetPolicyRepository {
@@ -375,11 +401,11 @@ export class WorkflowRepository {
 
 export class EventRepository {
   async create(input: EventCreateInput) {
-    return prisma.simulationEvent.create({ data: { ...input, severity: input.severity ?? EventSeverity.INFO } });
+    return prisma.simulationEvent.create({ data: toSimulationEventCreateData(input) });
   }
 
-  async listByRun(simulationRunId: string) {
-    return prisma.simulationEvent.findMany({ where: { simulationRunId }, orderBy: { createdAt: "asc" } });
+  async listByRunForOrganization(runId: string, organizationId: string) {
+    return prisma.simulationEvent.findMany(toSimulationEventRunQuery(runId, organizationId));
   }
 }
 
