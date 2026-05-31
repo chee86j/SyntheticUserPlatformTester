@@ -1,2 +1,11 @@
-export { RunRepository, PersonaRepository, WorkflowRepository, EventRepository, disconnectDatabaseClient } from "./repositories/index.js";
-export type { RunCreateInput, EventCreateInput } from "./repositories/index.js";
+export {
+  RunRepository,
+  PersonaRepository,
+  WorkflowRepository,
+  EventRepository,
+  UserRepository,
+  ProjectRepository,
+  disconnectDatabaseClient
+} from "./repositories/index.js";
+
+export type { RunCreateInput, EventCreateInput, AuthenticatedUser } from "./repositories/index.js";

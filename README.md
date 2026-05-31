@@ -4,8 +4,8 @@ This repository is a TypeScript monorepo foundation for the Synthetic User Valid
 
 ## Repository Structure
 
-- `apps/web` - future frontend dashboard app
-- `apps/api` - backend API app (currently includes `GET /health`)
+- `apps/web` - local dashboard app with login/logout route protection
+- `apps/api` - backend API app with auth and protected routes
 - `apps/runner` - future synthetic user execution runner
 - `packages/shared` - shared types and common utilities
 - `packages/database` - database schema and data access package
@@ -25,13 +25,24 @@ This repository is a TypeScript monorepo foundation for the Synthetic User Valid
 2. Create local environment files:
    - Copy `.env.example` to `.env`
    - Copy `apps/api/.env.example` to `apps/api/.env`
+   - Copy `apps/web/.env.example` to `apps/web/.env`
 3. Validate and start infra:
    - `docker compose --env-file .env -f infra/docker/docker-compose.yml config`
    - `docker compose --env-file .env -f infra/docker/docker-compose.yml up -d`
-4. Start API locally:
-   - `npm run dev:api`
-5. Check health endpoint:
-   - `http://localhost:3001/health`
+4. Apply DB schema and seed:
+   - `npm run prisma:generate -w @synthetic/database`
+   - `npm run prisma:migrate -w @synthetic/database`
+   - `npm run prisma:seed -w @synthetic/database`
+5. Start API and web apps:
+   - `npm run dev -w @synthetic/api`
+   - `npm run dev -w @synthetic/web`
+6. Open dashboard login:
+   - `http://localhost:3000/login`
+
+## Local MVP Login
+
+- Email: `admin@syntheticlabs.local`
+- Password: `ChangeMe123!`
 
 ## Quality Commands
 
@@ -39,9 +50,3 @@ This repository is a TypeScript monorepo foundation for the Synthetic User Valid
 - `npm run typecheck`
 - `npm run format`
 - `npm run test`
-
-## Notes
-
-- This phase intentionally avoids business logic.
-- API startup fails fast when required env vars are missing.
-- Foundation principles: KISS, SRP, YAGNI.

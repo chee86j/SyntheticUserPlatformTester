@@ -1,5 +1,6 @@
-import { Prisma, PrismaClient } from "@prisma/client";
-import { EventSeverity, RunStatus } from "@prisma/client";
+import { EventSeverity, Prisma, PrismaClient, RunStatus } from "@prisma/client";
+
+export type PlatformRole = "OWNER" | "ADMIN" | "TESTER" | "VIEWER";
 
 export type RunCreateInput = {
   organizationId: string;
@@ -21,6 +22,61 @@ export type EventCreateInput = {
 };
 
 const prisma = new PrismaClient();
+
+export type AuthenticatedUser = {
+  id: string;
+  organizationId: string;
+  email: string;
+  name: string;
+  role: PlatformRole;
+  passwordHash: string;
+};
+
+export class UserRepository {
+  async findByEmail(email: string): Promise<AuthenticatedUser | null> {
+    const user = await prisma.user.findUnique({ where: { email } } as never);
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      name: user.name,
+      role: user.role as PlatformRole,
+      passwordHash: (user as { passwordHash: string }).passwordHash
+    };
+  }
+
+  async findSafeById(id: string) {
+    const user = await prisma.user.findUnique({ where: { id } } as never);
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      name: user.name,
+      role: user.role as PlatformRole,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+  }
+}
+
+export class ProjectRepository {
+  async listByOrganization(organizationId: string) {
+    return prisma.project.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: "asc" }
+    });
+  }
+}
 
 export class RunRepository {
   async create(input: RunCreateInput) {

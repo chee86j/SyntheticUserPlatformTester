@@ -1,3 +1,5 @@
+import { UserRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -9,12 +11,16 @@ async function main(): Promise<void> {
     }
   });
 
+  const adminPassword = "ChangeMe123!";
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
+
   const adminUser = await prisma.user.create({
     data: {
       organizationId: organization.id,
       email: "admin@syntheticlabs.local",
-      name: "Platform Admin",
-      role: "admin"
+      name: "Platform Owner",
+      role: UserRole.OWNER,
+      passwordHash: adminPasswordHash
     }
   });
 
@@ -79,6 +85,7 @@ async function main(): Promise<void> {
   console.log("Seed complete", {
     organizationId: organization.id,
     adminUserId: adminUser.id,
+    adminEmail: adminUser.email,
     projectId: project.id,
     environmentId: environment.id
   });
@@ -92,3 +99,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

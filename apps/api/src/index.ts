@@ -1,26 +1,25 @@
-import "dotenv/config";
+import { env } from "./config.js";
+import cookieParser from "cookie-parser";
 import express from "express";
-import { z } from "zod";
+import { authRouter } from "./routes/auth.js";
+import { protectedRouter } from "./routes/protected.js";
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  API_PORT: z.coerce.number().int().min(1).max(65535),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  REDIS_URL: z.string().min(1, "REDIS_URL is required")
+const app = express();
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", env.WEB_ORIGIN);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
 });
 
-const parsedEnv = envSchema.safeParse(process.env);
-
-if (!parsedEnv.success) {
-  console.error("Invalid API environment configuration:");
-  for (const issue of parsedEnv.error.issues) {
-    console.error(`- ${issue.path.join(".") || "env"}: ${issue.message}`);
-  }
-  process.exit(1);
-}
-
-const env = parsedEnv.data;
-const app = express();
+app.use(express.json());
+app.use(cookieParser());
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -29,6 +28,9 @@ app.get("/health", (_req, res) => {
     environment: env.NODE_ENV
   });
 });
+
+app.use("/auth", authRouter);
+app.use("/api", protectedRouter);
 
 app.listen(env.API_PORT, () => {
   console.log(`API listening on http://localhost:${env.API_PORT}`);

@@ -1,25 +1,31 @@
 {
-    "name":  "@synthetic/api",
-    "version":  "0.1.0",
-    "private":  true,
-    "type":  "module",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "scripts":  {
-                    "dev":  "tsx watch src/index.ts",
-                    "build":  "tsc -p tsconfig.json",
-                    "start":  "node dist/index.js",
-                    "test":  "node -e \"console.log(\u0027No tests yet for @synthetic/api\u0027)\"",
-                    "typecheck":  "tsc --noEmit -p tsconfig.json"
-                },
-    "dependencies":  {
-                         "dotenv":  "^16.6.1",
-                         "express":  "^5.1.0",
-                         "zod":  "^4.1.12"
-                     },
-    "devDependencies":  {
-                            "@types/express":  "^5.0.3",
-                            "@types/node":  "^24.10.1",
-                            "tsx":  "^4.20.6"
-                        }
+  "name": "@synthetic/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@synthetic/database": "0.1.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6"
+  }
 }
