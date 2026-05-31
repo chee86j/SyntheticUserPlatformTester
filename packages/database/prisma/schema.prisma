@@ -1,0 +1,250 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum AgentStatus {
+  IDLE
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum EventSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum ArtifactType {
+  SCREENSHOT
+  TRACE
+  CONSOLE_LOG
+  NETWORK_LOG
+  REPORT
+}
+
+enum FindingType {
+  UX
+  RELIABILITY
+  AUTH
+  PERFORMANCE
+}
+
+model Organization {
+  id                 String              @id @default(uuid())
+  name               String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  users              User[]
+  projects           Project[]
+  environments       Environment[]
+  personas           Persona[]
+  workflows          Workflow[]
+  testAccounts       TestAccount[]
+  simulationRuns     SimulationRun[]
+  simulationEvents   SimulationEvent[]
+  llmProviderConfigs LlmProviderConfig[]
+  budgetPolicies     BudgetPolicy[]
+}
+
+model User {
+  id              String          @id @default(uuid())
+  organizationId  String
+  email           String          @unique
+  name            String
+  role            String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulationRuns  SimulationRun[] @relation("RunCreator")
+}
+
+model Project {
+  id             String          @id @default(uuid())
+  organizationId String
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  environments   Environment[]
+  workflows      Workflow[]
+  simulationRuns SimulationRun[]
+
+  @@unique([organizationId, name])
+}
+
+model Environment {
+  id             String          @id @default(uuid())
+  organizationId String
+  projectId      String
+  name           String
+  baseUrl        String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testAccounts   TestAccount[]
+  simulationRuns SimulationRun[]
+
+  @@unique([projectId, name])
+}
+
+model Persona {
+  id               String            @id @default(uuid())
+  organizationId   String
+  name             String
+  description      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulationRuns   SimulationRun[]
+  simulationAgents SimulationAgent[]
+
+  @@unique([organizationId, name])
+}
+
+model Workflow {
+  id             String          @id @default(uuid())
+  organizationId String
+  projectId      String
+  name           String
+  description    String?
+  entryPath      String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  simulationRuns SimulationRun[]
+
+  @@unique([projectId, name])
+}
+
+model TestAccount {
+  id             String       @id @default(uuid())
+  organizationId String
+  environmentId  String
+  username       String
+  password       String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  environment    Environment  @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentId, username])
+}
+
+model SimulationRun {
+  id              String            @id @default(uuid())
+  organizationId  String
+  projectId       String
+  environmentId   String
+  workflowId      String
+  personaId       String?
+  createdByUserId String
+  status          RunStatus         @default(PENDING)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment     Environment       @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  workflow        Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  persona         Persona?          @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  createdByUser   User              @relation("RunCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  agents          SimulationAgent[]
+  events          SimulationEvent[]
+  artifacts       Artifact[]
+  findings        Finding[]
+}
+
+model SimulationAgent {
+  id              String          @id @default(uuid())
+  simulationRunId String
+  personaId       String?
+  testAccountId   String?
+  status          AgentStatus     @default(IDLE)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  simulationRun   SimulationRun   @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+  persona         Persona?        @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  artifacts       Artifact[]
+}
+
+model SimulationEvent {
+  id                String         @id @default(uuid())
+  organizationId    String
+  simulationRunId   String
+  simulationAgentId String?
+  severity          EventSeverity  @default(INFO)
+  type              String
+  message           String
+  metadata          Json?
+  createdAt         DateTime       @default(now())
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulationRun     SimulationRun  @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+}
+
+model Artifact {
+  id                String          @id @default(uuid())
+  simulationRunId   String
+  simulationAgentId String
+  type              ArtifactType
+  uri               String
+  createdAt         DateTime        @default(now())
+  simulationRun     SimulationRun   @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+  simulationAgent   SimulationAgent @relation(fields: [simulationAgentId], references: [id], onDelete: Cascade)
+}
+
+model Finding {
+  id              String        @id @default(uuid())
+  simulationRunId String
+  type            FindingType
+  title           String
+  detail          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  simulationRun   SimulationRun @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+}
+
+model LlmProviderConfig {
+  id             String        @id @default(uuid())
+  organizationId String
+  provider       String
+  model          String
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model BudgetPolicy {
+  id                    String       @id @default(uuid())
+  organizationId        String
+  name                  String
+  maxRunCostUsd         Decimal?     @db.Decimal(10, 2)
+  maxRunDurationSeconds Int?
+  isActive              Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+}
