@@ -1,4 +1,5 @@
-import { EnvironmentRepository, ProjectRepository } from "@synthetic/database";
+import { EnvironmentRepository, PersonaRepository, ProjectRepository } from "@synthetic/database";
+import { personaCreateSchema, personaUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
@@ -6,14 +7,10 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/require-au
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
+const personaRepository = new PersonaRepository();
 
-const projectCreateSchema = z.object({
-  name: z.string().trim().min(1).max(120)
-});
-
-const projectUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(120)
-});
+const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
+const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 
 const environmentTypeSchema = z.enum(["LOCAL", "STAGING", "DEMO"]);
 const environmentStatusSchema = z.enum(["ACTIVE", "INACTIVE", "UNREACHABLE"]);
@@ -34,18 +31,15 @@ const environmentUpdateSchema = z.object({
   status: environmentStatusSchema.optional()
 });
 
-const idParamsSchema = z.object({
-  projectId: z.string().uuid()
-});
+const idParamsSchema = z.object({ projectId: z.string().uuid() });
+const personaIdParamsSchema = z.object({ personaId: z.string().uuid() });
 
 const environmentParamsSchema = z.object({
   projectId: z.string().uuid(),
   environmentId: z.string().uuid()
 });
 
-const testConnectionBodySchema = z.object({
-  timeoutMs: z.number().int().positive().max(10000).optional()
-});
+const testConnectionBodySchema = z.object({ timeoutMs: z.number().int().positive().max(10000).optional() });
 
 function normalizeAllowedDomains(rawDomains: string[]): string[] {
   const normalized = rawDomains
@@ -68,8 +62,74 @@ async function ensureProjectInOrg(projectId: string, organizationId: string) {
 }
 
 export const protectedRouter = Router();
-
 protectedRouter.use(requireAuth);
+
+protectedRouter.get("/personas", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+  const personas = await personaRepository.listByOrganization(user.organizationId);
+  res.json({ personas });
+});
+
+protectedRouter.get("/personas/:personaId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+  const params = personaIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid persona id" });
+  const persona = await personaRepository.findByIdForOrganization(params.data.personaId, user.organizationId);
+  if (!persona) return void res.status(404).json({ error: "Persona not found" });
+  res.json({ persona });
+});
+
+protectedRouter.post("/personas", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+  const parsed = personaCreateSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid persona payload" });
+
+  try {
+    const persona = await personaRepository.createForOrganization(user.organizationId, parsed.data);
+    res.status(201).json({ persona });
+  } catch {
+    res.status(409).json({ error: "Persona with this name already exists" });
+  }
+});
+
+protectedRouter.patch("/personas/:personaId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = personaIdParamsSchema.safeParse(req.params);
+  const parsed = personaUpdateSchema.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    return void res.status(400).json({ error: "Invalid persona update payload" });
+  }
+
+  try {
+    const update = await personaRepository.updateForOrganization(
+      params.data.personaId,
+      user.organizationId,
+      parsed.data
+    );
+
+    if (update.count === 0) return void res.status(404).json({ error: "Persona not found" });
+
+    const persona = await personaRepository.findByIdForOrganization(params.data.personaId, user.organizationId);
+    res.json({ persona });
+  } catch {
+    res.status(409).json({ error: "Persona with this name already exists" });
+  }
+});
+
+protectedRouter.delete("/personas/:personaId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+  const params = personaIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid persona id" });
+  const result = await personaRepository.deleteForOrganization(params.data.personaId, user.organizationId);
+  if (result.count === 0) return void res.status(404).json({ error: "Persona not found" });
+  res.json({ success: true });
+});
 
 protectedRouter.get("/projects", async (req: AuthenticatedRequest, res) => {
   const user = req.user;
@@ -384,17 +444,9 @@ protectedRouter.post(
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(environment.baseUrl, {
-        method: "GET",
-        signal: controller.signal
-      });
+      const response = await fetch(environment.baseUrl, { method: "GET", signal: controller.signal });
       clearTimeout(timeout);
-
-      res.json({
-        ok: response.ok,
-        statusCode: response.status,
-        checkedAt: new Date().toISOString()
-      });
+      res.json({ ok: response.ok, statusCode: response.status, checkedAt: new Date().toISOString() });
     } catch (error) {
       clearTimeout(timeout);
       res.json({

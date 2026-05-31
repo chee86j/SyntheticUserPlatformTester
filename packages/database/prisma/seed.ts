@@ -42,19 +42,83 @@ async function main(): Promise<void> {
     }
   });
 
-  const personaNames = [
-    "Speed Runner",
-    "Cautious Explorer",
-    "Error Prone Clicker",
-    "Detail Checker",
-    "Power User"
+  const personas = [
+    {
+      name: "Clinical Specialist",
+      role: "Nurse Practitioner",
+      industry: "Healthcare",
+      technicalProficiency: 42,
+      domainExpertise: 92,
+      timePressure: 78,
+      patience: 36,
+      confidence: 44,
+      errorRecovery: 61,
+      riskTolerance: 29,
+      accessibilityNeeds: ["high-contrast text"],
+      behaviorNotes: "Reads labels carefully and expects explicit feedback before continuing."
+    },
+    {
+      name: "Operations Lead",
+      role: "Operations Manager",
+      industry: "Logistics",
+      technicalProficiency: 67,
+      domainExpertise: 74,
+      timePressure: 88,
+      patience: 41,
+      confidence: 69,
+      errorRecovery: 72,
+      riskTolerance: 55,
+      accessibilityNeeds: [],
+      behaviorNotes: "Prefers direct paths and abandons workflows that require repeated backtracking."
+    },
+    {
+      name: "Compliance Reviewer",
+      role: "Audit Analyst",
+      industry: "Financial Services",
+      technicalProficiency: 58,
+      domainExpertise: 83,
+      timePressure: 35,
+      patience: 79,
+      confidence: 63,
+      errorRecovery: 76,
+      riskTolerance: 18,
+      accessibilityNeeds: ["reduced-motion"],
+      behaviorNotes: "Validates wording and consistency thoroughly and flags ambiguous actions."
+    },
+    {
+      name: "Support Agent",
+      role: "Customer Support Specialist",
+      industry: "SaaS",
+      technicalProficiency: 72,
+      domainExpertise: 57,
+      timePressure: 64,
+      patience: 68,
+      confidence: 66,
+      errorRecovery: 81,
+      riskTolerance: 49,
+      accessibilityNeeds: [],
+      behaviorNotes: "Tries recovery paths quickly and relies on search/navigation cues."
+    },
+    {
+      name: "Field Technician",
+      role: "Service Technician",
+      industry: "Energy",
+      technicalProficiency: 49,
+      domainExpertise: 71,
+      timePressure: 82,
+      patience: 33,
+      confidence: 52,
+      errorRecovery: 59,
+      riskTolerance: 62,
+      accessibilityNeeds: ["large-touch-targets"],
+      behaviorNotes: "Uses shortest path under pressure and may skip optional guidance content."
+    }
   ];
 
   await prisma.persona.createMany({
-    data: personaNames.map((name) => ({
+    data: personas.map((persona) => ({
       organizationId: organization.id,
-      name,
-      description: `${name} baseline persona`
+      ...persona
     }))
   });
 

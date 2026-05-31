@@ -15,7 +15,8 @@
                 },
     "dependencies":  {
                          "@prisma/client":  "^6.8.2",
-                         "bcryptjs":  "^3.0.2"
+                         "bcryptjs":  "^3.0.2",
+                         "@synthetic/shared":  "0.1.0"
                      },
     "devDependencies":  {
                             "prisma":  "^6.8.2",
