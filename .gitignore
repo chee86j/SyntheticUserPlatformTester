@@ -8,6 +8,9 @@
 # testing
 /coverage
 
+# cursor rules
+/.cursor
+
 # next.js
 /.next/
 /out/
