@@ -166,7 +166,12 @@ CREATE TABLE "SimulationRun" (
     "projectId" TEXT NOT NULL,
     "environmentId" TEXT NOT NULL,
     "workflowId" TEXT NOT NULL,
+    "budgetPolicyId" TEXT,
     "personaId" TEXT,
+    "selectedPersonaIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "selectedTestAccountIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "requestedAgentCount" INTEGER NOT NULL,
+    "maxRunDurationSeconds" INTEGER NOT NULL,
     "createdByUserId" TEXT NOT NULL,
     "status" "RunStatus" NOT NULL DEFAULT 'PENDING',
     "startedAt" TIMESTAMP(3),
@@ -327,6 +332,9 @@ ALTER TABLE "SimulationRun" ADD CONSTRAINT "SimulationRun_environmentId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "SimulationRun" ADD CONSTRAINT "SimulationRun_workflowId_fkey" FOREIGN KEY ("workflowId") REFERENCES "Workflow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SimulationRun" ADD CONSTRAINT "SimulationRun_budgetPolicyId_fkey" FOREIGN KEY ("budgetPolicyId") REFERENCES "BudgetPolicy"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SimulationRun" ADD CONSTRAINT "SimulationRun_personaId_fkey" FOREIGN KEY ("personaId") REFERENCES "Persona"("id") ON DELETE SET NULL ON UPDATE CASCADE;

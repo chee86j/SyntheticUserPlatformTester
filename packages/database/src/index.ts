@@ -7,6 +7,7 @@ export {
   ProjectRepository,
   EnvironmentRepository,
   TestAccountRepository,
+  BudgetPolicyRepository,
   disconnectDatabaseClient
 } from "./repositories/index.js";
 

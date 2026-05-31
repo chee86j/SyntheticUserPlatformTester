@@ -143,7 +143,7 @@ async function apiRequest<T>(cookieHeader: string | undefined, path: string, ini
 }
 
 function shellNav(user: CurrentUser): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><a href="/dashboard/run-setup">Run Setup</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
 }
 
 function renderLogin(error?: string): string {
@@ -615,5 +615,230 @@ app.post("/dashboard/workflows/:workflowId/delete", async (req, res) => {
     method: "DELETE"
   });
   res.redirect(`/dashboard/workflows?projectId=${projectId}&flash=Workflow+deleted`);
+});
+
+
+type BudgetPolicy = {
+  id: string;
+  name: string;
+  maxRunDurationSeconds: number | null;
+};
+
+type RunSetupOptions = {
+  projects: Project[];
+  personas: Persona[];
+  budgetPolicies: BudgetPolicy[];
+};
+
+function workflowOptions(workflows: Workflow[]): string {
+  return workflows
+    .map((workflow) => `<option value="${workflow.id}">${esc(workflow.name)} (${esc(workflow.status)})</option>`)
+    .join("");
+}
+
+function personaOptions(personas: Persona[]): string {
+  return personas
+    .map((persona) => `<label style="display:block;"><input type="checkbox" name="personaIds" value="${persona.id}" /> ${esc(persona.name)} (${esc(persona.role)})</label>`)
+    .join("");
+}
+
+function testAccountOptions(accounts: TestAccount[]): string {
+  return accounts
+    .map(
+      (account) =>
+        `<label style="display:block;"><input type="checkbox" name="testAccountIds" value="${account.id}" /> ${esc(account.label)} (${esc(account.status)})</label>`
+    )
+    .join("");
+}
+
+function renderRunSetupPage(args: {
+  user: CurrentUser;
+  options: RunSetupOptions;
+  selectedProjectId?: string;
+  selectedEnvironmentId?: string;
+  selectedWorkflowId?: string;
+  workflows: Workflow[];
+  testAccounts: TestAccount[];
+  error?: string;
+  flash?: string;
+}): string {
+  const selectedProject =
+    args.options.projects.find((project) => project.id === args.selectedProjectId) ?? args.options.projects[0];
+  const environments = selectedProject?.environments ?? [];
+
+  return renderPage(
+    "Run Setup",
+    `${shellNav(args.user)}
+${args.error ? `<p style="color:#b00020;">${esc(args.error)}</p>` : ""}
+${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
+<h2>Simulation Run Setup</h2>
+<form method="post" action="/dashboard/run-setup/preview" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+<label>Project
+<select name="projectId" required>
+${args.options.projects
+  .map(
+    (project) =>
+      `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`
+  )
+  .join("")}
+</select>
+</label>
+<label>Environment
+<select name="environmentId" required>
+${environments
+  .map(
+    (environment) =>
+      `<option value="${environment.id}" ${args.selectedEnvironmentId === environment.id ? "selected" : ""}>${esc(environment.name)}</option>`
+  )
+  .join("")}
+</select>
+</label>
+<label>Workflow
+<select name="workflowId" required>${workflowOptions(args.workflows)}</select>
+</label>
+<label>Budget Policy
+<select name="budgetPolicyId" required>
+${args.options.budgetPolicies.map((policy) => `<option value="${policy.id}">${esc(policy.name)}</option>`).join("")}
+</select>
+</label>
+<label>Number of Agents
+<input type="number" min="1" max="100" name="agentCount" value="5" required />
+</label>
+<label>Max Run Duration (seconds)
+<input type="number" min="30" max="7200" name="maxRunDurationSeconds" value="600" required />
+</label>
+<div>
+<h3>Personas</h3>
+${personaOptions(args.options.personas)}
+</div>
+<div>
+<h3>Test Accounts</h3>
+${testAccountOptions(args.testAccounts)}
+</div>
+<button type="submit" style="grid-column:1/-1;">Review Summary</button>
+</form>`
+  );
+}
+
+function parseMulti(body: Record<string, unknown>, key: string): string[] {
+  const value = body[key];
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") return [value];
+  return [];
+}
+
+app.get("/dashboard/run-setup", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const options = await apiRequest<RunSetupOptions>(req.headers.cookie, "/api/run-setup/options");
+  if (!options) {
+    return void res.status(500).type("html").send(renderPage("Error", "Unable to load run setup options."));
+  }
+
+  const selectedProjectId =
+    typeof req.query.projectId === "string" ? req.query.projectId : options.projects[0]?.id;
+  const selectedProject = options.projects.find((project) => project.id === selectedProjectId);
+  const selectedEnvironmentId =
+    typeof req.query.environmentId === "string"
+      ? req.query.environmentId
+      : selectedProject?.environments?.[0]?.id;
+
+  const workflowsResponse = selectedProjectId
+    ? await apiRequest<{ workflows: Workflow[] }>(
+        req.headers.cookie,
+        `/api/projects/${selectedProjectId}/workflows`
+      )
+    : { workflows: [] as Workflow[] };
+
+  const testAccountsResponse = selectedEnvironmentId
+    ? await apiRequest<{ testAccounts: TestAccount[] }>(
+        req.headers.cookie,
+        `/api/environments/${selectedEnvironmentId}/test-accounts`
+      )
+    : { testAccounts: [] as TestAccount[] };
+
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  const error = typeof req.query.error === "string" ? req.query.error : undefined;
+
+  res
+    .status(200)
+    .type("html")
+    .send(
+      renderRunSetupPage({
+        user,
+        options,
+        selectedProjectId,
+        selectedEnvironmentId,
+        workflows: workflowsResponse?.workflows ?? [],
+        testAccounts: testAccountsResponse?.testAccounts ?? [],
+        error,
+        flash
+      })
+    );
+});
+
+app.post("/dashboard/run-setup/preview", async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const payload = {
+    projectId: String(body.projectId ?? ""),
+    environmentId: String(body.environmentId ?? ""),
+    workflowId: String(body.workflowId ?? ""),
+    personaIds: parseMulti(body, "personaIds"),
+    agentCount: Number(body.agentCount ?? 0),
+    testAccountIds: parseMulti(body, "testAccountIds"),
+    budgetPolicyId: String(body.budgetPolicyId ?? ""),
+    maxRunDurationSeconds: Number(body.maxRunDurationSeconds ?? 0)
+  };
+
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  res.status(200).type("html").send(
+    renderPage(
+      "Run Summary",
+      `${shellNav(user)}
+<h2>Run Summary</h2>
+<pre>${esc(JSON.stringify(payload, null, 2))}</pre>
+<form method="post" action="/dashboard/run-setup/start">
+${Object.entries(payload)
+  .map(([key, value]) => {
+    if (Array.isArray(value)) {
+      return value.map((v) => `<input type="hidden" name="${key}" value="${esc(String(v))}" />`).join("");
+    }
+    return `<input type="hidden" name="${key}" value="${esc(String(value))}" />`;
+  })
+  .join("")}
+<button type="submit">Start Run (Create Pending)</button>
+</form>
+<a href="/dashboard/run-setup">Back</a>`
+    )
+  );
+});
+
+app.post("/dashboard/run-setup/start", async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const payload = {
+    projectId: String(body.projectId ?? ""),
+    environmentId: String(body.environmentId ?? ""),
+    workflowId: String(body.workflowId ?? ""),
+    personaIds: parseMulti(body, "personaIds"),
+    agentCount: Number(body.agentCount ?? 0),
+    testAccountIds: parseMulti(body, "testAccountIds"),
+    budgetPolicyId: String(body.budgetPolicyId ?? ""),
+    maxRunDurationSeconds: Number(body.maxRunDurationSeconds ?? 0)
+  };
+
+  const response = await apiRequest<{ run?: { id: string } }>(req.headers.cookie, "/api/simulation-runs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response?.run?.id) {
+    return void res.redirect("/dashboard/run-setup?error=Run+configuration+is+invalid");
+  }
+
+  res.redirect(`/dashboard/run-setup?flash=Pending+run+created:+${response.run.id}`);
 });
 

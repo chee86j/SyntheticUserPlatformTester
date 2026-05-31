@@ -24,8 +24,12 @@ export type RunCreateInput = {
   projectId: string;
   environmentId: string;
   workflowId: string;
+  budgetPolicyId?: string;
   createdByUserId: string;
-  personaId?: string;
+  selectedPersonaIds: string[];
+  selectedTestAccountIds: string[];
+  requestedAgentCount: number;
+  maxRunDurationSeconds: number;
 };
 
 export type EventCreateInput = {
@@ -215,6 +219,13 @@ export class TestAccountRepository {
     });
   }
 
+  async listByIdsForOrganization(ids: string[], organizationId: string) {
+    return prisma.testAccount.findMany({
+      where: { id: { in: ids }, organizationId },
+      include: { reservations: { where: { releasedAt: null } } }
+    });
+  }
+
   async reserveAccountForRun(input: {
     testAccountId: string;
     organizationId: string;
@@ -298,8 +309,24 @@ export class TestAccountRepository {
 }
 
 export class RunRepository {
-  async create(input: RunCreateInput) {
-    return prisma.simulationRun.create({ data: { ...input, status: RunStatus.PENDING } });
+  async createPending(input: RunCreateInput) {
+    const personaId = input.selectedPersonaIds[0] ?? null;
+    return prisma.simulationRun.create({
+      data: {
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        workflowId: input.workflowId,
+        budgetPolicyId: input.budgetPolicyId,
+        createdByUserId: input.createdByUserId,
+        personaId,
+        selectedPersonaIds: input.selectedPersonaIds,
+        selectedTestAccountIds: input.selectedTestAccountIds,
+        requestedAgentCount: input.requestedAgentCount,
+        maxRunDurationSeconds: input.maxRunDurationSeconds,
+        status: RunStatus.PENDING
+      }
+    });
   }
 
   async updateStatus(runId: string, status: RunStatus) {
@@ -308,6 +335,16 @@ export class RunRepository {
 
   async getById(runId: string) {
     return prisma.simulationRun.findUnique({ where: { id: runId } });
+  }
+}
+
+export class BudgetPolicyRepository {
+  async listByOrganization(organizationId: string) {
+    return prisma.budgetPolicy.findMany({ where: { organizationId, isActive: true }, orderBy: { createdAt: "asc" } });
+  }
+
+  async findByIdForOrganization(id: string, organizationId: string) {
+    return prisma.budgetPolicy.findFirst({ where: { id, organizationId, isActive: true } });
   }
 }
 

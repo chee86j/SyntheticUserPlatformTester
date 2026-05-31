@@ -20,6 +20,8 @@ export {
   successCriteriaItemSchema
 } from "./workflow.js";
 
+export { runSetupSchema } from "./run-setup.js";
+
 export type { PersonaInput, PersonaCreateInput, PersonaUpdateInput } from "./persona.js";
 export type {
   TestAccountInput,
@@ -32,3 +34,4 @@ export type {
   WorkflowUpdateInput,
   SuccessCriteriaItem
 } from "./workflow.js";
+export type { RunSetupInput } from "./run-setup.js";

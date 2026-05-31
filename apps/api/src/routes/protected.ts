@@ -1,6 +1,6 @@
-import { EnvironmentRepository, PersonaRepository, ProjectRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
-import { personaCreateSchema, personaUpdateSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
-import type { EnvironmentStatus, EnvironmentType } from "@prisma/client";
+import { BudgetPolicyRepository, EnvironmentRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { personaCreateSchema, personaUpdateSchema, runSetupSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
+import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
@@ -11,6 +11,8 @@ const environmentRepository = new EnvironmentRepository();
 const personaRepository = new PersonaRepository();
 const testAccountRepository = new TestAccountRepository();
 const workflowRepository = new WorkflowRepository();
+const runRepository = new RunRepository();
+const budgetPolicyRepository = new BudgetPolicyRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -778,3 +780,113 @@ protectedRouter.delete(
   }
 );
 
+
+protectedRouter.get("/run-setup/options", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const projects = await projectRepository.listByOrganization(user.organizationId);
+  const personas = await personaRepository.listByOrganization(user.organizationId);
+  const budgetPolicies = await budgetPolicyRepository.listByOrganization(user.organizationId);
+
+  res.json({ projects, personas, budgetPolicies });
+});
+
+protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = runSetupSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid run configuration" });
+    return;
+  }
+
+  const input = parsed.data;
+
+  const project = await projectRepository.findByIdForOrganization(input.projectId, user.organizationId);
+  if (!project) return void res.status(400).json({ error: "Project not found" });
+
+  const environment = await environmentRepository.findByIdForProjectAndOrganization(
+    input.environmentId,
+    input.projectId,
+    user.organizationId
+  );
+  if (!environment) return void res.status(400).json({ error: "Environment not found in project" });
+
+  const workflow = await workflowRepository.findByIdForOrganization(input.workflowId, user.organizationId);
+  if (!workflow || workflow.projectId !== input.projectId) {
+    return void res.status(400).json({ error: "Workflow not found in project" });
+  }
+
+  if ((workflow.status as WorkflowStatus) !== "ACTIVE") {
+    return void res.status(400).json({ error: "Workflow must be ACTIVE" });
+  }
+
+  const allPersonas = await personaRepository.listByOrganization(user.organizationId);
+  const personaIds = new Set(allPersonas.map((persona) => persona.id));
+  if (!input.personaIds.every((id) => personaIds.has(id))) {
+    return void res.status(400).json({ error: "One or more personas are invalid" });
+  }
+
+  const budgetPolicy = await budgetPolicyRepository.findByIdForOrganization(
+    input.budgetPolicyId,
+    user.organizationId
+  );
+  if (!budgetPolicy) return void res.status(400).json({ error: "Budget policy not found" });
+
+  const selectedAccounts = await testAccountRepository.listByIdsForOrganization(
+    input.testAccountIds,
+    user.organizationId
+  );
+
+  const selectedInEnvironment = selectedAccounts.filter(
+    (account) => account.environmentId === input.environmentId
+  );
+
+  if (selectedInEnvironment.length !== input.testAccountIds.length) {
+    return void res.status(400).json({ error: "All test accounts must belong to selected environment" });
+  }
+
+  const availableAccounts = selectedInEnvironment.filter((account) => {
+    if (account.status === "DISABLED") return false;
+    if (account.allowConcurrentUse) return true;
+    return account.reservations.length === 0 && account.status === "AVAILABLE";
+  });
+
+  if (availableAccounts.length < input.agentCount) {
+    return void res.status(400).json({ error: "Not enough available test accounts for requested agent count" });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(environment.baseUrl, { method: "GET", signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      return void res.status(400).json({ error: "Environment is not reachable" });
+    }
+  } catch {
+    clearTimeout(timeout);
+    return void res.status(400).json({ error: "Environment is not reachable" });
+  }
+
+  if (input.personaIds.length < 1) {
+    return void res.status(400).json({ error: "At least one persona is required" });
+  }
+
+  const run = await runRepository.createPending({
+    organizationId: user.organizationId,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+    workflowId: input.workflowId,
+    budgetPolicyId: input.budgetPolicyId,
+    createdByUserId: user.id,
+    selectedPersonaIds: input.personaIds,
+    selectedTestAccountIds: input.testAccountIds,
+    requestedAgentCount: input.agentCount,
+    maxRunDurationSeconds: input.maxRunDurationSeconds
+  });
+
+  res.status(201).json({ run });
+});

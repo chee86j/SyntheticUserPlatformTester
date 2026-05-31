@@ -23,6 +23,16 @@ async function main(): Promise<void> {
     }
   });
 
+  await prisma.budgetPolicy.create({
+    data: {
+      organizationId: organization.id,
+      name: "Default Budget",
+      maxRunCostUsd: "50.00",
+      maxRunDurationSeconds: 900,
+      isActive: true
+    }
+  });
+
   const project = await prisma.project.create({
     data: {
       organizationId: organization.id,
@@ -210,5 +220,6 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
 
 
