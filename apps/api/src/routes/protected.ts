@@ -5,6 +5,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
 import { encryptSecret } from "../auth/secret-encryption.js";
+import { emitRunEvent } from "../realtime/socket.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -928,6 +929,7 @@ protectedRouter.post("/events", async (req: AuthenticatedRequest, res) => {
     timestamp: parsed.data.timestamp
   });
 
+  emitRunEvent(parsed.data.runId, event);
   res.status(201).json({ event });
 });
 

@@ -19,6 +19,7 @@
                          "dotenv":  "^16.6.1",
                          "express":  "^5.1.0",
                          "jsonwebtoken":  "^9.0.2",
+                         "socket.io":  "^4.8.1",
                          "zod":  "^4.1.12",
                          "@synthetic/shared":  "0.1.0"
                      },

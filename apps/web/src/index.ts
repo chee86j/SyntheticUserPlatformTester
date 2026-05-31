@@ -1,6 +1,8 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 type CurrentUser = {
@@ -62,6 +64,18 @@ type Persona = {
   behaviorNotes: string;
 };
 
+type SimulationEvent = {
+  id: string;
+  runId: string;
+  agentId: string | null;
+  personaId: string | null;
+  eventType: string;
+  severity: "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+  payload: Record<string, unknown>;
+  timestamp: string;
+  createdAt: string;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   WEB_PORT: z.coerce.number().int().min(1).max(65535),
@@ -80,6 +94,8 @@ if (!parsedEnv.success) {
 
 const env = parsedEnv.data;
 const app = express();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use("/static", express.static(path.join(__dirname, "public")));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
@@ -166,9 +182,61 @@ function personaForm(persona?: Persona): string {
 
 function renderPersonasPage(user: CurrentUser, personas: Persona[], selectedPersonaId?: string, flash?: string): string {
   const selected = selectedPersonaId ? personas.find((p) => p.id === selectedPersonaId) : personas[0];
-  const list = personas.map((persona) => `<li style="border:1px solid #ddd;padding:12px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;"><strong>${esc(persona.name)}</strong><div><a href="/dashboard/personas?personaId=${persona.id}">Edit</a> <form method="post" action="/dashboard/personas/${persona.id}/delete" style="display:inline;"><button>Delete</button></form></div></div><small>${esc(persona.role)} � ${esc(persona.industry)}</small><p>${esc(personaPreview(persona))}</p></li>`).join("\n");
+  const list = personas.map((persona) => `<li style="border:1px solid #ddd;padding:12px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;"><strong>${esc(persona.name)}</strong><div><a href="/dashboard/personas?personaId=${persona.id}">Edit</a> <form method="post" action="/dashboard/personas/${persona.id}/delete" style="display:inline;"><button>Delete</button></form></div></div><small>${esc(persona.role)} · ${esc(persona.industry)}</small><p>${esc(personaPreview(persona))}</p></li>`).join("\n");
 
   return renderPage("Personas", `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}<h2>Create Persona</h2><form method="post" action="/dashboard/personas">${personaForm()}<br /><button type="submit">Create Persona</button></form><h2>Existing Personas</h2><ul style="list-style:none;padding:0;">${list || "<li>No personas yet.</li>"}</ul>${selected ? `<h2>Edit Persona: ${esc(selected.name)}</h2><form method="post" action="/dashboard/personas/${selected.id}/update">${personaForm(selected)}<br /><button type="submit">Save Persona</button></form><h3>Preview</h3><p>${esc(personaPreview(selected))}</p>` : ""}`);
+}
+
+function shortEventSummary(event: SimulationEvent): string {
+  const payload = event.payload ?? {};
+  if (typeof payload.reason === "string" && payload.reason.length > 0) return payload.reason;
+  if (typeof payload.action === "string" && payload.action.length > 0) return payload.action;
+  if (typeof payload.message === "string" && payload.message.length > 0) return payload.message;
+  if (typeof payload.url === "string" && payload.url.length > 0) return payload.url;
+  const keys = Object.keys(payload);
+  if (keys.length === 0) return "No additional details";
+  return keys.slice(0, 3).join(", ");
+}
+
+function renderRunDetailPage(args: {
+  user: CurrentUser;
+  runId: string;
+  events: SimulationEvent[];
+  flash?: string;
+}): string {
+  const initialEvents = JSON.stringify(args.events);
+  const rows = args.events
+    .map(
+      (event) => `<tr data-event-id="${event.id}">
+<td>${esc(new Date(event.timestamp).toLocaleString())}</td>
+<td>${esc(event.agentId ?? "-")}</td>
+<td>${esc(event.eventType)}</td>
+<td>${esc(event.severity)}</td>
+<td>${esc(shortEventSummary(event))}</td>
+</tr>`
+    )
+    .join("");
+
+  return renderPage(
+    `Run ${args.runId}`,
+    `${shellNav(args.user)}
+${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
+<h2>Run Detail: ${esc(args.runId)}</h2>
+<p id="socket-status" style="font-size:12px;color:#555;">Connecting live feed...</p>
+<table style="width:100%;border-collapse:collapse;">
+<thead><tr><th align="left">Timestamp</th><th align="left">Agent</th><th align="left">Event Type</th><th align="left">Severity</th><th align="left">Summary</th></tr></thead>
+<tbody id="event-feed">${rows || '<tr><td colspan="5">No events yet.</td></tr>'}</tbody>
+</table>
+<script src="${env.API_BASE_URL}/socket.io/socket.io.js"></script>
+<script type="module" src="/static/run-events.js"></script>
+<script>
+window.__RUN_EVENTS_CONFIG__ = {
+  runId: ${JSON.stringify(args.runId)},
+  apiBaseUrl: ${JSON.stringify(env.API_BASE_URL)},
+  initialEvents: ${initialEvents}
+};
+</script>`
+  );
 }
 
 app.get("/", async (_req, res) => res.redirect("/dashboard/projects"));
@@ -839,6 +907,28 @@ app.post("/dashboard/run-setup/start", async (req, res) => {
     return void res.redirect("/dashboard/run-setup?error=Run+configuration+is+invalid");
   }
 
-  res.redirect(`/dashboard/run-setup?flash=Pending+run+created:+${response.run.id}`);
+  res.redirect(`/dashboard/runs/${response.run.id}?flash=Pending+run+created`);
 });
+
+app.get("/dashboard/runs/:runId", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const runId = req.params.runId;
+  const eventsResponse = await apiRequest<{ events: SimulationEvent[] }>(
+    req.headers.cookie,
+    `/api/runs/${runId}/events`
+  );
+
+  if (!eventsResponse) {
+    return void res
+      .status(404)
+      .type("html")
+      .send(renderPage("Run Not Found", `${shellNav(user)}<p>Run not found or inaccessible.</p>`));
+  }
+
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  res.status(200).type("html").send(renderRunDetailPage({ user, runId, events: eventsResponse.events, flash }));
+});
+
 

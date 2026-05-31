@@ -1,8 +1,10 @@
 import { env } from "./config.js";
 import cookieParser from "cookie-parser";
 import express from "express";
+import { createServer } from "node:http";
 import { authRouter } from "./routes/auth.js";
 import { protectedRouter } from "./routes/protected.js";
+import { initializeRealtime } from "./realtime/socket.js";
 
 const app = express();
 
@@ -32,6 +34,9 @@ app.get("/health", (_req, res) => {
 app.use("/auth", authRouter);
 app.use("/api", protectedRouter);
 
-app.listen(env.API_PORT, () => {
+const server = createServer(app);
+initializeRealtime(server);
+
+server.listen(env.API_PORT, () => {
   console.log(`API listening on http://localhost:${env.API_PORT}`);
 });
