@@ -142,9 +142,39 @@ async function main(): Promise<void> {
   });
 
   const workflows = [
-    { name: "Sign In and Dashboard", entryPath: "/login" },
-    { name: "Checkout Journey", entryPath: "/cart" },
-    { name: "Profile Update", entryPath: "/settings/profile" }
+    {
+      name: "Sign In and Dashboard",
+      description: "Validate primary sign-in path",
+      goal: "User signs in and reaches dashboard",
+      startingPath: "/login",
+      maxSteps: 40,
+      maxDurationSeconds: 300,
+      successCriteria: [{ type: "URL_CONTAINS", value: "/dashboard" }],
+      workflowType: "GOAL_BASED",
+      status: "ACTIVE"
+    },
+    {
+      name: "Checkout Journey",
+      description: "Validate checkout completion",
+      goal: "User completes checkout flow",
+      startingPath: "/cart",
+      maxSteps: 80,
+      maxDurationSeconds: 600,
+      successCriteria: [{ type: "PAGE_CONTAINS_TEXT", value: "Thank you" }],
+      workflowType: "SCRIPTED",
+      status: "DRAFT"
+    },
+    {
+      name: "Profile Update",
+      description: "Validate profile edits",
+      goal: "User updates profile information",
+      startingPath: "/settings/profile",
+      maxSteps: 50,
+      maxDurationSeconds: 420,
+      successCriteria: [{ type: "ELEMENT_VISIBLE", value: "profile-save-success" }],
+      workflowType: "EXPLORATORY",
+      status: "DRAFT"
+    }
   ];
 
   await prisma.workflow.createMany({
@@ -152,8 +182,14 @@ async function main(): Promise<void> {
       organizationId: organization.id,
       projectId: project.id,
       name: workflow.name,
-      description: `${workflow.name} synthetic flow`,
-      entryPath: workflow.entryPath
+      description: workflow.description,
+      goal: workflow.goal,
+      startingPath: workflow.startingPath,
+      maxSteps: workflow.maxSteps,
+      maxDurationSeconds: workflow.maxDurationSeconds,
+      successCriteria: workflow.successCriteria,
+      workflowType: workflow.workflowType,
+      status: workflow.status
     }))
   });
 
@@ -174,4 +210,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
 

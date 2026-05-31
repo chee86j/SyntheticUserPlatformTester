@@ -1,5 +1,5 @@
-import { EnvironmentRepository, PersonaRepository, ProjectRepository, TestAccountRepository } from "@synthetic/database";
-import { personaCreateSchema, personaUpdateSchema, testAccountSchema, testAccountUpdateSchema } from "@synthetic/shared";
+import { EnvironmentRepository, PersonaRepository, ProjectRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { personaCreateSchema, personaUpdateSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
@@ -10,6 +10,7 @@ const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
 const personaRepository = new PersonaRepository();
 const testAccountRepository = new TestAccountRepository();
+const workflowRepository = new WorkflowRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -683,4 +684,97 @@ protectedRouter.post("/test-accounts/:accountId/release", async (req: Authentica
 
 
 
+
+
+
+const workflowParamsSchema = z.object({ projectId: z.string().uuid(), workflowId: z.string().uuid() });
+
+protectedRouter.get("/projects/:projectId/workflows", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const paramsResult = idParamsSchema.safeParse(req.params);
+  if (!paramsResult.success) return void res.status(400).json({ error: "Invalid project id" });
+
+  const project = await ensureProjectInOrg(paramsResult.data.projectId, user.organizationId);
+  if (!project) return void res.status(404).json({ error: "Project not found" });
+
+  const workflows = await workflowRepository.listByProjectForOrganization(project.id, user.organizationId);
+  res.json({ workflows });
+});
+
+protectedRouter.post("/projects/:projectId/workflows", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const paramsResult = idParamsSchema.safeParse(req.params);
+  if (!paramsResult.success) return void res.status(400).json({ error: "Invalid project id" });
+
+  const project = await ensureProjectInOrg(paramsResult.data.projectId, user.organizationId);
+  if (!project) return void res.status(404).json({ error: "Project not found" });
+
+  const parsed = workflowCreateSchema.safeParse({ ...req.body, projectId: paramsResult.data.projectId });
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid workflow payload" });
+
+  try {
+    const workflow = await workflowRepository.createForOrganization(user.organizationId, parsed.data);
+    res.status(201).json({ workflow });
+  } catch {
+    res.status(409).json({ error: "Workflow with this name already exists in project" });
+  }
+});
+
+protectedRouter.patch(
+  "/projects/:projectId/workflows/:workflowId",
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.user;
+    if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+    const paramsResult = workflowParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) return void res.status(400).json({ error: "Invalid workflow id" });
+
+    const project = await ensureProjectInOrg(paramsResult.data.projectId, user.organizationId);
+    if (!project) return void res.status(404).json({ error: "Project not found" });
+
+    const parsed = workflowUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return void res.status(400).json({ error: "Invalid workflow update payload" });
+
+    try {
+      const result = await workflowRepository.updateForOrganization(
+        paramsResult.data.workflowId,
+        user.organizationId,
+        parsed.data
+      );
+
+      if (result.count === 0) return void res.status(404).json({ error: "Workflow not found" });
+
+      const workflow = await workflowRepository.findByIdForOrganization(
+        paramsResult.data.workflowId,
+        user.organizationId
+      );
+      res.json({ workflow });
+    } catch {
+      res.status(409).json({ error: "Workflow with this name already exists in project" });
+    }
+  }
+);
+
+protectedRouter.delete(
+  "/projects/:projectId/workflows/:workflowId",
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.user;
+    if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+    const paramsResult = workflowParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) return void res.status(400).json({ error: "Invalid workflow id" });
+
+    const result = await workflowRepository.deleteForOrganization(
+      paramsResult.data.workflowId,
+      user.organizationId
+    );
+
+    if (result.count === 0) return void res.status(404).json({ error: "Workflow not found" });
+    res.json({ success: true });
+  }
+);
 

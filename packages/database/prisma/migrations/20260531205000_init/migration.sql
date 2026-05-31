@@ -14,6 +14,12 @@ CREATE TYPE "EnvironmentStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'UNREACHABLE');
 CREATE TYPE "TestAccountStatus" AS ENUM ('AVAILABLE', 'RESERVED', 'DISABLED');
 
 -- CreateEnum
+CREATE TYPE "WorkflowType" AS ENUM ('SCRIPTED', 'GOAL_BASED', 'EXPLORATORY');
+
+-- CreateEnum
+CREATE TYPE "WorkflowStatus" AS ENUM ('DRAFT', 'ACTIVE', 'ARCHIVED');
+
+-- CreateEnum
 CREATE TYPE "RunStatus" AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED');
 
 -- CreateEnum
@@ -107,8 +113,14 @@ CREATE TABLE "Workflow" (
     "organizationId" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "description" TEXT,
-    "entryPath" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "goal" TEXT NOT NULL,
+    "startingPath" TEXT NOT NULL,
+    "maxSteps" INTEGER NOT NULL,
+    "maxDurationSeconds" INTEGER NOT NULL,
+    "successCriteria" JSONB NOT NULL,
+    "workflowType" "WorkflowType" NOT NULL,
+    "status" "WorkflowStatus" NOT NULL DEFAULT 'DRAFT',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

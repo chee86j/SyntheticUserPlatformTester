@@ -32,6 +32,18 @@ enum TestAccountStatus {
   DISABLED
 }
 
+enum WorkflowType {
+  SCRIPTED
+  GOAL_BASED
+  EXPLORATORY
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
 enum RunStatus {
   PENDING
   RUNNING
@@ -157,17 +169,23 @@ model Persona {
 }
 
 model Workflow {
-  id             String          @id @default(uuid())
-  organizationId String
-  projectId      String
-  name           String
-  description    String?
-  entryPath      String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  simulationRuns SimulationRun[]
+  id                 String          @id @default(uuid())
+  organizationId     String
+  projectId          String
+  name               String
+  description        String          @default("")
+  goal               String
+  startingPath       String
+  maxSteps           Int
+  maxDurationSeconds Int
+  successCriteria    Json
+  workflowType       WorkflowType
+  status             WorkflowStatus  @default(DRAFT)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  simulationRuns     SimulationRun[]
 
   @@unique([projectId, name])
 }

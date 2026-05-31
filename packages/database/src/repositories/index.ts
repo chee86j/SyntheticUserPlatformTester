@@ -11,7 +11,9 @@ import type {
   PersonaCreateInput,
   PersonaUpdateInput,
   TestAccountCreateInput,
-  TestAccountUpdateInput
+  TestAccountUpdateInput,
+  WorkflowCreateInput,
+  WorkflowUpdateInput
 } from "@synthetic/shared";
 import { canReserveAccount } from "./test-account-reservation.js";
 
@@ -310,8 +312,27 @@ export class RunRepository {
 }
 
 export class WorkflowRepository {
-  async listByProject(projectId: string) {
-    return prisma.workflow.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } });
+  async listByProjectForOrganization(projectId: string, organizationId: string) {
+    return prisma.workflow.findMany({
+      where: { projectId, organizationId },
+      orderBy: { createdAt: "asc" }
+    });
+  }
+
+  async findByIdForOrganization(id: string, organizationId: string) {
+    return prisma.workflow.findFirst({ where: { id, organizationId } });
+  }
+
+  async createForOrganization(organizationId: string, input: WorkflowCreateInput) {
+    return prisma.workflow.create({ data: { ...input, organizationId } });
+  }
+
+  async updateForOrganization(id: string, organizationId: string, input: WorkflowUpdateInput) {
+    return prisma.workflow.updateMany({ where: { id, organizationId }, data: input });
+  }
+
+  async deleteForOrganization(id: string, organizationId: string) {
+    return prisma.workflow.deleteMany({ where: { id, organizationId } });
   }
 }
 
@@ -328,3 +349,4 @@ export class EventRepository {
 export async function disconnectDatabaseClient(): Promise<void> {
   await prisma.$disconnect();
 }
+

@@ -30,6 +30,22 @@ type Project = {
   environments?: Environment[];
 };
 
+type SuccessCriteriaItem = { type: "URL_CONTAINS" | "PAGE_CONTAINS_TEXT" | "ELEMENT_VISIBLE" | "EVENT_EMITTED" | "MANUAL_NOTE"; value: string; };
+
+type Workflow = {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string;
+  goal: string;
+  startingPath: string;
+  maxSteps: number;
+  maxDurationSeconds: number;
+  successCriteria: SuccessCriteriaItem[];
+  workflowType: "SCRIPTED" | "GOAL_BASED" | "EXPLORATORY";
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
+
 type Persona = {
   id: string;
   name: string;
@@ -127,7 +143,7 @@ async function apiRequest<T>(cookieHeader: string | undefined, path: string, ini
 }
 
 function shellNav(user: CurrentUser): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
 }
 
 function renderLogin(error?: string): string {
@@ -440,3 +456,164 @@ app.post("/dashboard/test-accounts/:accountId/release", async (req, res) => {
   });
   res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Account+release+attempted`);
 });
+
+
+function parseSuccessCriteria(value: string): SuccessCriteriaItem[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [rawType, ...rest] = line.split(":");
+      const type = (rawType?.trim() || "MANUAL_NOTE") as SuccessCriteriaItem["type"];
+      const val = rest.join(":").trim() || line;
+      return { type, value: val };
+    });
+}
+
+function successCriteriaToText(items: SuccessCriteriaItem[]): string {
+  return items.map((item) => `${item.type}: ${item.value}`).join("\n");
+}
+
+function renderWorkflowsPage(
+  user: CurrentUser,
+  projects: Project[],
+  workflows: Workflow[],
+  selectedProjectId?: string,
+  selectedWorkflowId?: string,
+  flash?: string
+): string {
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
+  const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId) ?? workflows[0];
+
+  const list = workflows
+    .map(
+      (workflow) => `<li style="border:1px solid #ddd;padding:10px;margin-bottom:8px;">
+<strong>${esc(workflow.name)}</strong> (${esc(workflow.workflowType)})<br />
+<small>${esc(workflow.goal)}</small>
+<div>
+  <a href="/dashboard/workflows?projectId=${workflow.projectId}&workflowId=${workflow.id}">Edit</a>
+  <form method="post" action="/dashboard/workflows/${workflow.id}/delete" style="display:inline; margin-left:8px;">
+    <input type="hidden" name="projectId" value="${esc(workflow.projectId)}" />
+    <button type="submit">Delete</button>
+  </form>
+</div></li>`
+    )
+    .join("\n");
+
+  return renderPage(
+    "Workflows",
+    `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
+<h2>Select Project</h2>
+<form method="get" action="/dashboard/workflows">
+<select name="projectId">${projects
+      .map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`)
+      .join("")}</select>
+<button type="submit">Load</button>
+</form>
+${selectedProject ? `<h2>Create Workflow</h2>
+<form method="post" action="/dashboard/workflows" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+<input type="hidden" name="projectId" value="${selectedProject.id}" />
+<input name="name" placeholder="Name" required />
+<input name="workflowType" placeholder="SCRIPTED|GOAL_BASED|EXPLORATORY" value="GOAL_BASED" required />
+<input name="status" placeholder="DRAFT|ACTIVE|ARCHIVED" value="DRAFT" required />
+<input name="startingPath" placeholder="/start" required />
+<input name="maxSteps" placeholder="100" required />
+<input name="maxDurationSeconds" placeholder="600" required />
+<input name="goal" placeholder="User completes checkout" required style="grid-column:1/-1;" />
+<textarea name="description" placeholder="Description" style="grid-column:1/-1;"></textarea>
+<textarea name="successCriteria" placeholder="URL_CONTAINS: /checkout/success\nPAGE_CONTAINS_TEXT: Thank you" style="grid-column:1/-1;height:100px;" required></textarea>
+<button type="submit">Create Workflow</button>
+</form>
+<h2>Workflows</h2>
+<ul style="list-style:none;padding:0;">${list || "<li>No workflows yet.</li>"}</ul>` : "<p>Create a project first.</p>"}
+${selectedWorkflow ? `<h2>Edit Workflow: ${esc(selectedWorkflow.name)}</h2>
+<form method="post" action="/dashboard/workflows/${selectedWorkflow.id}/update" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+<input type="hidden" name="projectId" value="${selectedWorkflow.projectId}" />
+<input name="name" value="${esc(selectedWorkflow.name)}" required />
+<input name="workflowType" value="${esc(selectedWorkflow.workflowType)}" required />
+<input name="status" value="${esc(selectedWorkflow.status)}" required />
+<input name="startingPath" value="${esc(selectedWorkflow.startingPath)}" required />
+<input name="maxSteps" value="${selectedWorkflow.maxSteps}" required />
+<input name="maxDurationSeconds" value="${selectedWorkflow.maxDurationSeconds}" required />
+<input name="goal" value="${esc(selectedWorkflow.goal)}" required style="grid-column:1/-1;" />
+<textarea name="description" style="grid-column:1/-1;">${esc(selectedWorkflow.description ?? "")}</textarea>
+<textarea name="successCriteria" style="grid-column:1/-1;height:100px;" required>${esc(successCriteriaToText(selectedWorkflow.successCriteria || []))}</textarea>
+<button type="submit">Save Workflow</button>
+</form>` : ""}`
+  );
+}
+
+app.get("/dashboard/workflows", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const projectsResponse = await apiRequest<{ projects: Project[] }>(req.headers.cookie, "/api/projects");
+  const projects = projectsResponse?.projects ?? [];
+  const selectedProjectId =
+    typeof req.query.projectId === "string" ? req.query.projectId : projects[0]?.id;
+
+  let workflows: Workflow[] = [];
+  if (selectedProjectId) {
+    const workflowResponse = await apiRequest<{ workflows: Workflow[] }>(
+      req.headers.cookie,
+      `/api/projects/${selectedProjectId}/workflows`
+    );
+    workflows = workflowResponse?.workflows ?? [];
+  }
+
+  const selectedWorkflowId =
+    typeof req.query.workflowId === "string" ? req.query.workflowId : workflows[0]?.id;
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+
+  res
+    .status(200)
+    .type("html")
+    .send(renderWorkflowsPage(user, projects, workflows, selectedProjectId, selectedWorkflowId, flash));
+});
+
+function workflowPayloadFromBody(body: Record<string, unknown>) {
+  return {
+    projectId: String(body.projectId ?? ""),
+    name: String(body.name ?? ""),
+    description: String(body.description ?? ""),
+    goal: String(body.goal ?? ""),
+    startingPath: String(body.startingPath ?? ""),
+    maxSteps: Number(body.maxSteps ?? 100),
+    maxDurationSeconds: Number(body.maxDurationSeconds ?? 600),
+    successCriteria: parseSuccessCriteria(String(body.successCriteria ?? "")),
+    workflowType: String(body.workflowType ?? "GOAL_BASED"),
+    status: String(body.status ?? "DRAFT")
+  };
+}
+
+app.post("/dashboard/workflows", async (req, res) => {
+  const payload = workflowPayloadFromBody(req.body as Record<string, unknown>);
+  await apiRequest(req.headers.cookie, `/api/projects/${payload.projectId}/workflows`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  res.redirect(`/dashboard/workflows?projectId=${payload.projectId}&flash=Workflow+created`);
+});
+
+app.post("/dashboard/workflows/:workflowId/update", async (req, res) => {
+  const workflowId = req.params.workflowId;
+  const payload = workflowPayloadFromBody(req.body as Record<string, unknown>);
+  await apiRequest(req.headers.cookie, `/api/projects/${payload.projectId}/workflows/${workflowId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  res.redirect(`/dashboard/workflows?projectId=${payload.projectId}&workflowId=${workflowId}&flash=Workflow+updated`);
+});
+
+app.post("/dashboard/workflows/:workflowId/delete", async (req, res) => {
+  const workflowId = req.params.workflowId;
+  const projectId = String(req.body.projectId ?? "");
+  await apiRequest(req.headers.cookie, `/api/projects/${projectId}/workflows/${workflowId}`, {
+    method: "DELETE"
+  });
+  res.redirect(`/dashboard/workflows?projectId=${projectId}&flash=Workflow+deleted`);
+});
+
