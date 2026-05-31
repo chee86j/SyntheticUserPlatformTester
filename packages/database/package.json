@@ -7,7 +7,7 @@
     "types":  "src/index.ts",
     "scripts":  {
                     "build":  "tsc -p tsconfig.json",
-                    "test":  "node -e \"console.log(\u0027No tests yet for @synthetic/database\u0027)\"",
+                    "test":  "tsx --test src/repositories/*.test.ts",
                     "typecheck":  "tsc --noEmit -p tsconfig.json",
                     "prisma:generate":  "prisma generate",
                     "prisma:migrate":  "prisma migrate dev --name init",

@@ -123,13 +123,22 @@ async function main(): Promise<void> {
   });
 
   await prisma.testAccount.createMany({
-    data: Array.from({ length: 20 }, (_, i) => ({
-      organizationId: organization.id,
-      environmentId: environment.id,
-      username: `test_user_${String(i + 1).padStart(2, "0")}`,
-      password: `test_password_${String(i + 1).padStart(2, "0")}`,
-      isActive: true
-    }))
+    data: Array.from({ length: 20 }, (_, i) => {
+      const suffix = String(i + 1).padStart(2, "0");
+      return {
+        organizationId: organization.id,
+        environmentId: environment.id,
+        label: `Seed Account ${suffix}`,
+        username: `test_user_${suffix}`,
+        email: `test_user_${suffix}@example.local`,
+        role: "tester",
+        passwordSecretRef: `seed://test_user_${suffix}`,
+        encryptedPassword: null,
+        allowConcurrentUse: false,
+        status: "AVAILABLE",
+        notes: "Seeded test account"
+      };
+    })
   });
 
   const workflows = [
@@ -165,3 +174,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

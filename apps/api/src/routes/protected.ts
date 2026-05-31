@@ -1,13 +1,15 @@
-import { EnvironmentRepository, PersonaRepository, ProjectRepository } from "@synthetic/database";
-import { personaCreateSchema, personaUpdateSchema } from "@synthetic/shared";
+import { EnvironmentRepository, PersonaRepository, ProjectRepository, TestAccountRepository } from "@synthetic/database";
+import { personaCreateSchema, personaUpdateSchema, testAccountSchema, testAccountUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
+import { encryptSecret } from "../auth/secret-encryption.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
 const personaRepository = new PersonaRepository();
+const testAccountRepository = new TestAccountRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -458,3 +460,227 @@ protectedRouter.post(
     }
   }
 );
+
+
+
+
+const testAccountParamsSchema = z.object({ environmentId: z.string().uuid(), accountId: z.string().uuid() });
+const reserveBodySchema = z.object({ runId: z.string().uuid(), agentId: z.string().uuid() });
+
+const testAccountApiCreateSchema = testAccountSchema
+  .extend({
+    plainTextPassword: z.string().min(1).optional()
+  })
+  .refine((data) => Boolean(data.passwordSecretRef) || Boolean(data.encryptedPassword) || Boolean(data.plainTextPassword), {
+    message: "Either passwordSecretRef, encryptedPassword, or plainTextPassword is required"
+  })
+  .transform((data) => {
+    if (data.plainTextPassword && !data.encryptedPassword) {
+      return {
+        ...data,
+        encryptedPassword: encryptSecret(data.plainTextPassword)
+      };
+    }
+    return data;
+  });
+
+const testAccountApiUpdateSchema = testAccountUpdateSchema.extend({
+  plainTextPassword: z.string().min(1).optional()
+}).transform((data) => {
+  if (data.plainTextPassword) {
+    return {
+      ...data,
+      encryptedPassword: encryptSecret(data.plainTextPassword)
+    };
+  }
+  return data;
+});
+
+protectedRouter.get("/environments/:environmentId/test-accounts", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = z.object({ environmentId: z.string().uuid() }).safeParse(req.params);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid environment id" });
+
+  const environment = await environmentRepository.listByOrganization(user.organizationId);
+  if (!environment.find((item) => item.id === parsed.data.environmentId)) {
+    return void res.status(404).json({ error: "Environment not found" });
+  }
+
+  const accounts = await testAccountRepository.listByEnvironmentForOrganization(
+    parsed.data.environmentId,
+    user.organizationId
+  );
+
+  res.json({
+    testAccounts: accounts.map((account) => ({
+      ...account,
+      encryptedPassword: account.encryptedPassword ? "[redacted]" : null
+    }))
+  });
+});
+
+protectedRouter.post("/environments/:environmentId/test-accounts", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const envParsed = z.object({ environmentId: z.string().uuid() }).safeParse(req.params);
+  if (!envParsed.success) return void res.status(400).json({ error: "Invalid environment id" });
+
+  const parsed = testAccountApiCreateSchema.safeParse({ ...req.body, environmentId: envParsed.data.environmentId });
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid test account payload" });
+
+  try {
+    const created = await testAccountRepository.createForOrganization(user.organizationId, {
+      environmentId: parsed.data.environmentId,
+      label: parsed.data.label,
+      username: parsed.data.username,
+      email: parsed.data.email,
+      role: parsed.data.role,
+      passwordSecretRef: parsed.data.passwordSecretRef,
+      encryptedPassword: parsed.data.encryptedPassword,
+      allowConcurrentUse: parsed.data.allowConcurrentUse,
+      status: parsed.data.status,
+      notes: parsed.data.notes
+    });
+
+    res.status(201).json({ testAccount: { ...created, encryptedPassword: created.encryptedPassword ? "[redacted]" : null } });
+  } catch {
+    res.status(409).json({ error: "Duplicate username or email in this environment" });
+  }
+});
+
+protectedRouter.post("/environments/:environmentId/test-accounts/import", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const envParsed = z.object({ environmentId: z.string().uuid() }).safeParse(req.params);
+  if (!envParsed.success) return void res.status(400).json({ error: "Invalid environment id" });
+
+  const importItemSchema = testAccountSchema
+    .omit({ environmentId: true })
+    .extend({ plainTextPassword: z.string().min(1).optional() })
+    .refine(
+      (data) =>
+        Boolean(data.passwordSecretRef) ||
+        Boolean(data.encryptedPassword) ||
+        Boolean(data.plainTextPassword),
+      {
+        message: "Either passwordSecretRef, encryptedPassword, or plainTextPassword is required"
+      }
+    )
+    .transform((data) => {
+      if (data.plainTextPassword && !data.encryptedPassword) {
+        return { ...data, encryptedPassword: encryptSecret(data.plainTextPassword) };
+      }
+      return data;
+    });
+  const listSchema = z.array(importItemSchema);
+  const parsed = listSchema.safeParse(req.body?.accounts);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid import payload" });
+
+  try {
+    const created = await testAccountRepository.bulkCreateForOrganization(
+      user.organizationId,
+      parsed.data.map((item) => ({
+        environmentId: envParsed.data.environmentId,
+        label: item.label,
+        username: item.username,
+        email: item.email,
+        role: item.role,
+        passwordSecretRef: item.passwordSecretRef,
+        encryptedPassword: item.encryptedPassword,
+        allowConcurrentUse: item.allowConcurrentUse,
+        status: item.status,
+        notes: item.notes
+      }))
+    );
+
+    res.status(201).json({ count: created.length });
+  } catch {
+    res.status(409).json({ error: "Import contains duplicate username or email in this environment" });
+  }
+});
+
+protectedRouter.patch("/environments/:environmentId/test-accounts/:accountId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsedParams = testAccountParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) return void res.status(400).json({ error: "Invalid account id" });
+
+  const parsed = testAccountApiUpdateSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid test account update payload" });
+
+  const updatePayload = { ...parsed.data } as Record<string, unknown>;
+  delete updatePayload.plainTextPassword;
+  const result = await testAccountRepository.updateForOrganization(parsedParams.data.accountId, user.organizationId, updatePayload);
+  if (result.count === 0) return void res.status(404).json({ error: "Test account not found" });
+  res.json({ success: true });
+});
+
+protectedRouter.delete("/environments/:environmentId/test-accounts/:accountId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsedParams = testAccountParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) return void res.status(400).json({ error: "Invalid account id" });
+
+  const result = await testAccountRepository.deleteForOrganization(parsedParams.data.accountId, user.organizationId);
+  if (result.count === 0) return void res.status(404).json({ error: "Test account not found" });
+  res.json({ success: true });
+});
+
+protectedRouter.post("/test-accounts/:accountId/reserve", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const accountParams = z.object({ accountId: z.string().uuid() }).safeParse(req.params);
+  const bodyParsed = reserveBodySchema.safeParse(req.body);
+  if (!accountParams.success || !bodyParsed.success) {
+    return void res.status(400).json({ error: "Invalid reserve payload" });
+  }
+
+  const reserveResult = await testAccountRepository.reserveAccountForRun({
+    testAccountId: accountParams.data.accountId,
+    organizationId: user.organizationId,
+    runId: bodyParsed.data.runId,
+    agentId: bodyParsed.data.agentId
+  });
+
+  if (!reserveResult.ok) {
+    return void res.status(409).json({ error: reserveResult.reason === "NOT_FOUND" ? "Test account not found" : "Test account is already reserved" });
+  }
+
+  res.json({ success: true });
+});
+
+protectedRouter.post("/test-accounts/:accountId/release", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const accountParams = z.object({ accountId: z.string().uuid() }).safeParse(req.params);
+  const bodyParsed = reserveBodySchema.safeParse(req.body);
+  if (!accountParams.success || !bodyParsed.success) {
+    return void res.status(400).json({ error: "Invalid release payload" });
+  }
+
+  const releaseResult = await testAccountRepository.releaseAccountReservation({
+    testAccountId: accountParams.data.accountId,
+    organizationId: user.organizationId,
+    runId: bodyParsed.data.runId,
+    agentId: bodyParsed.data.agentId
+  });
+
+  if (!releaseResult.ok) {
+    return void res.status(404).json({ error: "Test account not found" });
+  }
+
+  res.json({ success: true });
+});
+
+
+
+
+

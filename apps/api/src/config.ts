@@ -8,7 +8,10 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
   AUTH_JWT_SECRET: z.string().min(32, "AUTH_JWT_SECRET must be at least 32 chars"),
   AUTH_COOKIE_NAME: z.string().min(1).default("sup_session"),
-  WEB_ORIGIN: z.string().url("WEB_ORIGIN must be a valid URL")
+  WEB_ORIGIN: z.string().url("WEB_ORIGIN must be a valid URL"),
+  TEST_ACCOUNT_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "TEST_ACCOUNT_ENCRYPTION_KEY must be at least 32 chars")
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

@@ -4,8 +4,16 @@ export {
   personaUpdateSchema
 } from "./persona.js";
 
+export {
+  testAccountSchema,
+  testAccountCreateSchema,
+  testAccountUpdateSchema,
+  testAccountStatusSchema
+} from "./test-account.js";
+
+export type { PersonaInput, PersonaCreateInput, PersonaUpdateInput } from "./persona.js";
 export type {
-  PersonaInput,
-  PersonaCreateInput,
-  PersonaUpdateInput
-} from "./persona.js";
+  TestAccountInput,
+  TestAccountCreateInput,
+  TestAccountUpdateInput
+} from "./test-account.js";

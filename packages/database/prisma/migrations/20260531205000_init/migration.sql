@@ -11,6 +11,9 @@ CREATE TYPE "EnvironmentType" AS ENUM ('LOCAL', 'STAGING', 'DEMO');
 CREATE TYPE "EnvironmentStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'UNREACHABLE');
 
 -- CreateEnum
+CREATE TYPE "TestAccountStatus" AS ENUM ('AVAILABLE', 'RESERVED', 'DISABLED');
+
+-- CreateEnum
 CREATE TYPE "RunStatus" AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED');
 
 -- CreateEnum
@@ -117,13 +120,31 @@ CREATE TABLE "TestAccount" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "environmentId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
     "username" TEXT NOT NULL,
-    "password" TEXT NOT NULL,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "email" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "passwordSecretRef" TEXT,
+    "encryptedPassword" TEXT,
+    "allowConcurrentUse" BOOLEAN NOT NULL DEFAULT false,
+    "status" "TestAccountStatus" NOT NULL DEFAULT 'AVAILABLE',
+    "notes" TEXT NOT NULL DEFAULT '',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "TestAccount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TestAccountReservation" (
+    "id" TEXT NOT NULL,
+    "testAccountId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "agentId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "releasedAt" TIMESTAMP(3),
+
+    CONSTRAINT "TestAccountReservation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -245,6 +266,12 @@ CREATE UNIQUE INDEX "Workflow_projectId_name_key" ON "Workflow"("projectId", "na
 CREATE UNIQUE INDEX "TestAccount_environmentId_username_key" ON "TestAccount"("environmentId", "username");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "TestAccount_environmentId_email_key" ON "TestAccount"("environmentId", "email");
+
+-- CreateIndex
+CREATE INDEX "TestAccountReservation_testAccountId_releasedAt_idx" ON "TestAccountReservation"("testAccountId", "releasedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "BudgetPolicy_organizationId_name_key" ON "BudgetPolicy"("organizationId", "name");
 
 -- AddForeignKey
@@ -273,6 +300,9 @@ ALTER TABLE "TestAccount" ADD CONSTRAINT "TestAccount_organizationId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "TestAccount" ADD CONSTRAINT "TestAccount_environmentId_fkey" FOREIGN KEY ("environmentId") REFERENCES "Environment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TestAccountReservation" ADD CONSTRAINT "TestAccountReservation_testAccountId_fkey" FOREIGN KEY ("testAccountId") REFERENCES "TestAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SimulationRun" ADD CONSTRAINT "SimulationRun_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;

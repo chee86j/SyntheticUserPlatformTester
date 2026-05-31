@@ -127,7 +127,7 @@ async function apiRequest<T>(cookieHeader: string | undefined, path: string, ini
 }
 
 function shellNav(user: CurrentUser): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
 }
 
 function renderLogin(error?: string): string {
@@ -244,4 +244,199 @@ app.post("/dashboard/personas/:personaId/delete", async (req, res) => {
 
 app.listen(env.WEB_PORT, () => {
   console.log(`Web listening on http://localhost:${env.WEB_PORT}`);
+});
+
+
+type TestAccount = {
+  id: string;
+  environmentId: string;
+  label: string;
+  username: string;
+  email: string;
+  role: string;
+  status: "AVAILABLE" | "RESERVED" | "DISABLED";
+  allowConcurrentUse: boolean;
+  notes: string;
+};
+
+function renderTestAccountsPage(
+  user: CurrentUser,
+  environments: Environment[],
+  accounts: TestAccount[],
+  selectedEnvironmentId?: string,
+  flash?: string
+): string {
+  const selectedEnvironment = environments.find((item) => item.id === selectedEnvironmentId) ?? environments[0];
+
+  const accountRows = accounts
+    .map(
+      (account) => `<tr>
+<td>${esc(account.label)}</td>
+<td>${esc(account.username)}</td>
+<td>${esc(account.email)}</td>
+<td>${esc(account.role)}</td>
+<td>${esc(account.status)}</td>
+<td>${account.allowConcurrentUse ? "yes" : "no"}</td>
+<td>
+<form method="post" action="/dashboard/test-accounts/${account.id}/reserve" style="display:inline;">
+  <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
+  <input type="hidden" name="runId" value="00000000-0000-0000-0000-000000000001" />
+  <input type="hidden" name="agentId" value="00000000-0000-0000-0000-000000000001" />
+  <button type="submit">Reserve</button>
+</form>
+<form method="post" action="/dashboard/test-accounts/${account.id}/release" style="display:inline; margin-left:6px;">
+  <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
+  <input type="hidden" name="runId" value="00000000-0000-0000-0000-000000000001" />
+  <input type="hidden" name="agentId" value="00000000-0000-0000-0000-000000000001" />
+  <button type="submit">Release</button>
+</form>
+<form method="post" action="/dashboard/test-accounts/${account.id}/delete" style="display:inline; margin-left:6px;">
+  <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
+  <button type="submit">Delete</button>
+</form>
+</td></tr>`
+    )
+    .join("\n");
+
+  return renderPage(
+    "Test Accounts",
+    `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
+<h2>Environment</h2>
+<form method="get" action="/dashboard/test-accounts">
+<select name="environmentId">${environments
+      .map(
+        (environment) =>
+          `<option value="${esc(environment.id)}" ${selectedEnvironment?.id === environment.id ? "selected" : ""}>${esc(environment.name)} (${esc(environment.baseUrl)})</option>`
+      )
+      .join("")}</select>
+<button type="submit">Load</button>
+</form>
+${
+  selectedEnvironment
+    ? `<h2>Create Test Account</h2>
+<form method="post" action="/dashboard/test-accounts" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+  <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+  <input name="label" placeholder="Label" required />
+  <input name="username" placeholder="Username" required />
+  <input name="email" placeholder="Email" required />
+  <input name="role" placeholder="Role" required />
+  <input name="password" placeholder="Password" required />
+  <input name="passwordSecretRef" placeholder="passwordSecretRef (optional)" />
+  <select name="status"><option>AVAILABLE</option><option>RESERVED</option><option>DISABLED</option></select>
+  <label><input type="checkbox" name="allowConcurrentUse" />Allow concurrent use</label>
+  <input name="notes" placeholder="Notes" />
+  <button type="submit">Create</button>
+</form>
+<h3>Import 20 Accounts</h3>
+<form method="post" action="/dashboard/test-accounts/import-20">
+  <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+  <button type="submit">Generate 20 Accounts</button>
+</form>
+<h2>Existing Accounts</h2>
+<table style="width:100%;"><thead><tr><th>Label</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Concurrent</th><th>Actions</th></tr></thead><tbody>${accountRows || '<tr><td colspan="7">No accounts yet.</td></tr>'}</tbody></table>`
+    : "<p>No environments available. Create one under Projects first.</p>"
+}`
+  );
+}
+
+app.get("/dashboard/test-accounts", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const environmentResponse = await apiRequest<{ projects: Project[] }>(req.headers.cookie, "/api/projects");
+  const environments = (environmentResponse?.projects ?? []).flatMap((project) => project.environments ?? []);
+  const selectedEnvironmentId =
+    typeof req.query.environmentId === "string" ? req.query.environmentId : environments[0]?.id;
+
+  let accounts: TestAccount[] = [];
+  if (selectedEnvironmentId) {
+    const accountResponse = await apiRequest<{ testAccounts: TestAccount[] }>(
+      req.headers.cookie,
+      `/api/environments/${selectedEnvironmentId}/test-accounts`
+    );
+    accounts = accountResponse?.testAccounts ?? [];
+  }
+
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  res.status(200).type("html").send(renderTestAccountsPage(user, environments, accounts, selectedEnvironmentId, flash));
+});
+
+app.post("/dashboard/test-accounts", async (req, res) => {
+  const environmentId = String(req.body.environmentId ?? "");
+
+  await apiRequest(req.headers.cookie, `/api/environments/${environmentId}/test-accounts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      environmentId,
+      label: String(req.body.label ?? ""),
+      username: String(req.body.username ?? ""),
+      email: String(req.body.email ?? ""),
+      role: String(req.body.role ?? ""),
+      plainTextPassword: String(req.body.password ?? ""),
+      passwordSecretRef: String(req.body.passwordSecretRef ?? "") || undefined,
+      allowConcurrentUse: req.body.allowConcurrentUse === "on",
+      status: String(req.body.status ?? "AVAILABLE"),
+      notes: String(req.body.notes ?? "")
+    })
+  });
+
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Test+account+created`);
+});
+
+app.post("/dashboard/test-accounts/import-20", async (req, res) => {
+  const environmentId = String(req.body.environmentId ?? "");
+
+  const accounts = Array.from({ length: 20 }, (_, index) => {
+    const n = String(index + 1).padStart(2, "0");
+    return {
+      label: `Seed Account ${n}`,
+      username: `seed_user_${n}`,
+      email: `seed_user_${n}@example.local`,
+      role: "tester",
+      plainTextPassword: `SeedPass!${n}`,
+      status: "AVAILABLE",
+      allowConcurrentUse: false,
+      notes: "Imported batch"
+    };
+  });
+
+  await apiRequest(req.headers.cookie, `/api/environments/${environmentId}/test-accounts/import`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ accounts })
+  });
+
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Imported+20+accounts`);
+});
+
+app.post("/dashboard/test-accounts/:accountId/delete", async (req, res) => {
+  const accountId = req.params.accountId;
+  const environmentId = String(req.body.environmentId ?? "");
+  await apiRequest(req.headers.cookie, `/api/environments/${environmentId}/test-accounts/${accountId}`, {
+    method: "DELETE"
+  });
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Account+deleted`);
+});
+
+app.post("/dashboard/test-accounts/:accountId/reserve", async (req, res) => {
+  const accountId = req.params.accountId;
+  const environmentId = String(req.body.environmentId ?? "");
+  await apiRequest(req.headers.cookie, `/api/test-accounts/${accountId}/reserve`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runId: String(req.body.runId), agentId: String(req.body.agentId) })
+  });
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Account+reservation+attempted`);
+});
+
+app.post("/dashboard/test-accounts/:accountId/release", async (req, res) => {
+  const accountId = req.params.accountId;
+  const environmentId = String(req.body.environmentId ?? "");
+  await apiRequest(req.headers.cookie, `/api/test-accounts/${accountId}/release`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runId: String(req.body.runId), agentId: String(req.body.agentId) })
+  });
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Account+release+attempted`);
 });
