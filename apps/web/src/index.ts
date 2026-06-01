@@ -187,17 +187,6 @@ function renderPersonasPage(user: CurrentUser, personas: Persona[], selectedPers
   return renderPage("Personas", `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}<h2>Create Persona</h2><form method="post" action="/dashboard/personas">${personaForm()}<br /><button type="submit">Create Persona</button></form><h2>Existing Personas</h2><ul style="list-style:none;padding:0;">${list || "<li>No personas yet.</li>"}</ul>${selected ? `<h2>Edit Persona: ${esc(selected.name)}</h2><form method="post" action="/dashboard/personas/${selected.id}/update">${personaForm(selected)}<br /><button type="submit">Save Persona</button></form><h3>Preview</h3><p>${esc(personaPreview(selected))}</p>` : ""}`);
 }
 
-function shortEventSummary(event: SimulationEvent): string {
-  const payload = event.payload ?? {};
-  if (typeof payload.reason === "string" && payload.reason.length > 0) return payload.reason;
-  if (typeof payload.action === "string" && payload.action.length > 0) return payload.action;
-  if (typeof payload.message === "string" && payload.message.length > 0) return payload.message;
-  if (typeof payload.url === "string" && payload.url.length > 0) return payload.url;
-  const keys = Object.keys(payload);
-  if (keys.length === 0) return "No additional details";
-  return keys.slice(0, 3).join(", ");
-}
-
 function renderRunDetailPage(args: {
   user: CurrentUser;
   runId: string;
@@ -205,37 +194,30 @@ function renderRunDetailPage(args: {
   flash?: string;
 }): string {
   const initialEvents = JSON.stringify(args.events);
-  const rows = args.events
-    .map(
-      (event) => `<tr data-event-id="${event.id}">
-<td>${esc(new Date(event.timestamp).toLocaleString())}</td>
-<td>${esc(event.agentId ?? "-")}</td>
-<td>${esc(event.eventType)}</td>
-<td>${esc(event.severity)}</td>
-<td>${esc(shortEventSummary(event))}</td>
-</tr>`
-    )
-    .join("");
-
   return renderPage(
     `Run ${args.runId}`,
-    `${shellNav(args.user)}
+    `<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+${shellNav(args.user)}
 ${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
-<h2>Run Detail: ${esc(args.runId)}</h2>
-<p id="socket-status" style="font-size:12px;color:#555;">Connecting live feed...</p>
-<table style="width:100%;border-collapse:collapse;">
-<thead><tr><th align="left">Timestamp</th><th align="left">Agent</th><th align="left">Event Type</th><th align="left">Severity</th><th align="left">Summary</th></tr></thead>
-<tbody id="event-feed">${rows || '<tr><td colspan="5">No events yet.</td></tr>'}</tbody>
-</table>
+<div class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+  <div class="mb-5 flex items-center justify-between">
+    <h2 class="text-xl font-semibold text-slate-900">Run Dashboard: ${esc(args.runId)}</h2>
+    <p id="socket-status" class="text-sm text-slate-500">Connecting live feed...</p>
+  </div>
+  <div id="run-dashboard-root"></div>
+</div>
 <script src="${env.API_BASE_URL}/socket.io/socket.io.js"></script>
-<script type="module" src="/static/run-events.js"></script>
 <script>
 window.__RUN_EVENTS_CONFIG__ = {
   runId: ${JSON.stringify(args.runId)},
   apiBaseUrl: ${JSON.stringify(env.API_BASE_URL)},
   initialEvents: ${initialEvents}
 };
-</script>`
+</script>
+<script type="module" src="/static/run-events.js"></script>`
   );
 }
 
@@ -929,6 +911,12 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
 
   const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
   res.status(200).type("html").send(renderRunDetailPage({ user, runId, events: eventsResponse.events, flash }));
+});
+
+app.get("/runs/:runId", async (req, res) => {
+  const flash = typeof req.query.flash === "string" ? req.query.flash : "";
+  const encodedFlash = flash ? `?flash=${encodeURIComponent(flash)}` : "";
+  res.redirect(`/dashboard/runs/${req.params.runId}${encodedFlash}`);
 });
 
 
