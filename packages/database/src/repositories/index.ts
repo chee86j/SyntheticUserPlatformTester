@@ -359,6 +359,43 @@ export class RunRepository {
     return prisma.simulationRun.findUnique({ where: { id: runId } });
   }
 
+  async getExecutionById(runId: string) {
+    return prisma.simulationRun.findUnique({
+      where: { id: runId },
+      include: {
+        environment: true,
+        workflow: true,
+        project: true
+      }
+    });
+  }
+
+  async createAgent(input: { simulationRunId: string; personaId?: string; testAccountId?: string }) {
+    return prisma.simulationAgent.create({
+      data: {
+        simulationRunId: input.simulationRunId,
+        personaId: input.personaId ?? null,
+        testAccountId: input.testAccountId ?? null,
+        status: "RUNNING",
+        startedAt: new Date()
+      }
+    });
+  }
+
+  async updateAgentStatus(
+    agentId: string,
+    status: "IDLE" | "RUNNING" | "COMPLETED" | "FAILED",
+    opts?: { finishedAt?: Date }
+  ) {
+    return prisma.simulationAgent.update({
+      where: { id: agentId },
+      data: {
+        status,
+        ...(opts?.finishedAt ? { finishedAt: opts.finishedAt } : {})
+      }
+    });
+  }
+
   async getAgentById(agentId: string) {
     return prisma.simulationAgent.findUnique({ where: { id: agentId } });
   }
