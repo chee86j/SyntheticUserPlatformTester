@@ -164,7 +164,11 @@ function buildDashboard(events) {
 
 function useRunEvents(config) {
   const [events, setEvents] = React.useState(Array.isArray(config.initialEvents) ? [...config.initialEvents] : []);
+  const [artifacts, setArtifacts] = React.useState(
+    Array.isArray(config.initialArtifacts) ? [...config.initialArtifacts] : []
+  );
   const seenRef = React.useRef(new Set(events.map((event) => event.id)));
+  const artifactSeenRef = React.useRef(new Set(artifacts.map((artifact) => artifact.id)));
 
   React.useEffect(() => {
     let mounted = true;
@@ -221,7 +225,31 @@ function useRunEvents(config) {
     };
   }, [config.apiBaseUrl, config.runId]);
 
-  return events;
+  React.useEffect(() => {
+    async function fetchArtifacts() {
+      const response = await fetch(`${config.apiBaseUrl}/api/runs/${config.runId}/artifacts`, {
+        method: "GET",
+        credentials: "include"
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const nextArtifacts = Array.isArray(payload.artifacts) ? payload.artifacts : [];
+      setArtifacts((prev) => {
+        const merged = [...prev];
+        for (const artifact of nextArtifacts) {
+          if (!artifactSeenRef.current.has(artifact.id)) {
+            artifactSeenRef.current.add(artifact.id);
+            merged.push(artifact);
+          }
+        }
+        return merged;
+      });
+    }
+
+    void fetchArtifacts();
+  }, [config.apiBaseUrl, config.runId]);
+
+  return { events, artifacts };
 }
 
 function MetricCard({ title, value, subtitle }) {
@@ -235,7 +263,7 @@ function MetricCard({ title, value, subtitle }) {
 }
 
 function DashboardApp({ config }) {
-  const events = useRunEvents(config);
+  const { events, artifacts } = useRunEvents(config);
   const dashboard = React.useMemo(() => buildDashboard(events), [events]);
   const rc = Recharts;
 
@@ -428,6 +456,41 @@ function DashboardApp({ config }) {
                 )
           )
         )
+      )
+    ),
+    React.createElement(
+      "section",
+      { className: "rounded-xl border border-slate-200 bg-white p-4" },
+      React.createElement("h3", { className: "text-sm font-semibold text-slate-900" }, "Artifacts"),
+      React.createElement(
+        "div",
+        { className: "mt-3 space-y-2" },
+        artifacts.length === 0
+          ? React.createElement("p", { className: "text-sm text-slate-500" }, "No artifacts yet.")
+          : artifacts
+              .slice()
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((artifact) =>
+                React.createElement(
+                  "div",
+                  { key: artifact.id, className: "rounded-lg border border-slate-200 p-3 text-sm" },
+                  React.createElement(
+                    "div",
+                    { className: "flex items-center justify-between gap-2" },
+                    React.createElement("span", { className: "font-medium text-slate-800" }, artifact.type),
+                    React.createElement(
+                      "span",
+                      { className: "text-xs text-slate-500" },
+                      new Date(artifact.createdAt).toLocaleString()
+                    )
+                  ),
+                  React.createElement(
+                    "a",
+                    { className: "mt-1 block break-all text-xs text-blue-600 underline", href: artifact.uri, target: "_blank", rel: "noreferrer" },
+                    artifact.uri
+                  )
+                )
+              )
       )
     )
   );

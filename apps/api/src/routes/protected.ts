@@ -1,4 +1,4 @@
-import { BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { personaCreateSchema, personaUpdateSchema, runSetupSchema, simulationEventSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
 import { Router } from "express";
@@ -15,6 +15,7 @@ const workflowRepository = new WorkflowRepository();
 const runRepository = new RunRepository();
 const budgetPolicyRepository = new BudgetPolicyRepository();
 const eventRepository = new EventRepository();
+const artifactRepository = new ArtifactRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -947,4 +948,20 @@ protectedRouter.get("/runs/:runId/events", async (req: AuthenticatedRequest, res
 
   const events = await eventRepository.listByRunForOrganization(params.data.runId, user.organizationId);
   res.json({ events });
+});
+
+protectedRouter.get("/runs/:runId/artifacts", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const artifacts = await artifactRepository.listByRunForOrganization(params.data.runId, user.organizationId);
+  res.json({ artifacts });
 });

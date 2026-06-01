@@ -69,6 +69,7 @@ enum EventSeverity {
 enum ArtifactType {
   SCREENSHOT
   TRACE
+  VIDEO
   CONSOLE_LOG
   NETWORK_LOG
   REPORT

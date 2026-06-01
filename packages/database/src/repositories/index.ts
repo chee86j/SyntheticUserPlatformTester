@@ -2,6 +2,7 @@ import {
   EnvironmentStatus,
   EnvironmentType,
   EventSeverity,
+  ArtifactType,
   Prisma,
   PrismaClient,
   RunStatus,
@@ -66,6 +67,12 @@ export function toSimulationEventRunQuery(runId: string, organizationId: string)
 
 export type ProjectCreateInput = { organizationId: string; name: string };
 export type ProjectUpdateInput = { name?: string };
+export type ArtifactCreateInput = {
+  simulationRunId: string;
+  simulationAgentId: string;
+  type: ArtifactType;
+  uri: string;
+};
 
 export type EnvironmentCreateInput = {
   organizationId: string;
@@ -443,6 +450,19 @@ export class EventRepository {
 
   async listByRunForOrganization(runId: string, organizationId: string) {
     return prisma.simulationEvent.findMany(toSimulationEventRunQuery(runId, organizationId));
+  }
+}
+
+export class ArtifactRepository {
+  async create(input: ArtifactCreateInput) {
+    return prisma.artifact.create({ data: input });
+  }
+
+  async listByRunForOrganization(runId: string, organizationId: string) {
+    return prisma.artifact.findMany({
+      where: { simulationRunId: runId, simulationRun: { organizationId } },
+      orderBy: { createdAt: "desc" }
+    });
   }
 }
 

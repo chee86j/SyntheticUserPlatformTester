@@ -3,6 +3,7 @@ export {
   PersonaRepository,
   WorkflowRepository,
   EventRepository,
+  ArtifactRepository,
   UserRepository,
   ProjectRepository,
   EnvironmentRepository,
@@ -14,6 +15,7 @@ export {
 export type {
   RunCreateInput,
   EventCreateInput,
+  ArtifactCreateInput,
   AuthenticatedUser,
   EnvironmentCreateInput,
   EnvironmentUpdateInput,

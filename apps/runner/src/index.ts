@@ -1,8 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { EventSeverity, RunStatus } from "@prisma/client";
 import {
+  ArtifactRepository,
   RunRepository,
   TestAccountRepository,
   disconnectDatabaseClient
@@ -15,7 +15,7 @@ import { decryptSecret } from "./lib/secrets.js";
 
 const runRepository = new RunRepository();
 const testAccountRepository = new TestAccountRepository();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const artifactRepository = new ArtifactRepository();
 
 async function main(): Promise<void> {
   const runId = env.RUN_ID;
@@ -91,8 +91,8 @@ async function main(): Promise<void> {
     throw new Error("Test account reservation failed");
   }
 
-  const screenshotsDir = path.join(__dirname, "..", "screenshots", run.id, agent.id);
-  await mkdir(screenshotsDir, { recursive: true });
+  const runDir = path.join(process.cwd(), "runs", run.id, agent.id);
+  await mkdir(runDir, { recursive: true });
 
   try {
     await runRepository.updateStatus(run.id, RunStatus.RUNNING);
@@ -111,8 +111,16 @@ async function main(): Promise<void> {
 
     await executeScriptedWorkflow({
       actions,
-      screenshotsDir,
-      emit: (payload) => emit({ ...payload, severity: payload.severity as EventSeverity | undefined })
+      runDir,
+      emit: (payload) => emit({ ...payload, severity: payload.severity as EventSeverity | undefined }),
+      onArtifact: async (artifact) => {
+        await artifactRepository.create({
+          simulationRunId: run.id,
+          simulationAgentId: agent.id,
+          type: artifact.type,
+          uri: artifact.uri
+        });
+      }
     });
 
     await runRepository.updateAgentStatus(agent.id, "COMPLETED", { finishedAt: new Date() });

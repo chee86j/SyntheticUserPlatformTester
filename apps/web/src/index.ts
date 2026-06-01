@@ -76,6 +76,15 @@ type SimulationEvent = {
   createdAt: string;
 };
 
+type Artifact = {
+  id: string;
+  simulationRunId: string;
+  simulationAgentId: string;
+  type: "SCREENSHOT" | "TRACE" | "VIDEO" | "CONSOLE_LOG" | "NETWORK_LOG" | "REPORT";
+  uri: string;
+  createdAt: string;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   WEB_PORT: z.coerce.number().int().min(1).max(65535),
@@ -191,9 +200,11 @@ function renderRunDetailPage(args: {
   user: CurrentUser;
   runId: string;
   events: SimulationEvent[];
+  artifacts: Artifact[];
   flash?: string;
 }): string {
   const initialEvents = JSON.stringify(args.events);
+  const initialArtifacts = JSON.stringify(args.artifacts);
   return renderPage(
     `Run ${args.runId}`,
     `<script src="https://cdn.tailwindcss.com"></script>
@@ -214,7 +225,8 @@ ${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
 window.__RUN_EVENTS_CONFIG__ = {
   runId: ${JSON.stringify(args.runId)},
   apiBaseUrl: ${JSON.stringify(env.API_BASE_URL)},
-  initialEvents: ${initialEvents}
+  initialEvents: ${initialEvents},
+  initialArtifacts: ${initialArtifacts}
 };
 </script>
 <script type="module" src="/static/run-events.js"></script>`
@@ -901,8 +913,12 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
     req.headers.cookie,
     `/api/runs/${runId}/events`
   );
+  const artifactsResponse = await apiRequest<{ artifacts: Artifact[] }>(
+    req.headers.cookie,
+    `/api/runs/${runId}/artifacts`
+  );
 
-  if (!eventsResponse) {
+  if (!eventsResponse || !artifactsResponse) {
     return void res
       .status(404)
       .type("html")
@@ -910,7 +926,9 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
   }
 
   const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
-  res.status(200).type("html").send(renderRunDetailPage({ user, runId, events: eventsResponse.events, flash }));
+  res.status(200).type("html").send(
+    renderRunDetailPage({ user, runId, events: eventsResponse.events, artifacts: artifactsResponse.artifacts, flash })
+  );
 });
 
 app.get("/runs/:runId", async (req, res) => {

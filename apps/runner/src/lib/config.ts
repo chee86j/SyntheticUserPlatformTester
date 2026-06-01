@@ -12,6 +12,7 @@ const envSchema = z.object({
   RUNNER_HEADLESS: z.coerce.boolean().default(true),
   RUNNER_SLOW_MO_MS: z.coerce.number().int().min(0).max(5000).default(0),
   RUNNER_NAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(20000),
+  RUNNER_RECORD_VIDEO: z.coerce.boolean().default(false),
   RUNNER_DEFAULT_PASSWORD: z.string().min(1).default("Password123!"),
   TEST_ACCOUNT_ENCRYPTION_KEY: z.string().min(32),
   RUNNER_LOGIN_USERNAME_SELECTOR: z.string().default('input[name="username"], input[type="email"], #username'),
