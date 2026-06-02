@@ -28,14 +28,12 @@ export class RunnerApiClient {
   }
 
   async request<T>(path: string, options?: RequestOptions): Promise<T> {
-    const response = await fetch(`${env.API_BASE_URL}${path}`, {
-      method: options?.method ?? "GET",
-      headers: {
-        "content-type": "application/json",
-        cookie: this.cookieHeader
-      },
-      body: options?.body ? JSON.stringify(options.body) : undefined
-    });
+    let response = await this.performRequest(path, options);
+
+    if (response.status === 401) {
+      await this.login();
+      response = await this.performRequest(path, options);
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -43,5 +41,16 @@ export class RunnerApiClient {
     }
 
     return (await response.json()) as T;
+  }
+
+  private performRequest(path: string, options?: RequestOptions): Promise<Response> {
+    return fetch(`${env.API_BASE_URL}${path}`, {
+      method: options?.method ?? "GET",
+      headers: {
+        "content-type": "application/json",
+        cookie: this.cookieHeader
+      },
+      body: options?.body ? JSON.stringify(options.body) : undefined
+    });
   }
 }

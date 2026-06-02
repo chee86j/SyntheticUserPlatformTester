@@ -98,6 +98,16 @@ type Artifact = {
   createdAt: string;
 };
 
+type Finding = {
+  id: string;
+  type: string;
+  title: string;
+  summary: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  recommendation: string;
+  createdAt: string;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   WEB_PORT: z.coerce.number().int().min(1).max(65535),
@@ -122,7 +132,192 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 function renderPage(title: string, body: string): string {
-  return `<!doctype html><html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${title}</title></head><body style="font-family: sans-serif; max-width: 1080px; margin: 30px auto; padding: 0 12px;">${body}</body></html>`;
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+  <style>
+    :root {
+      --bg: #f5efe3;
+      --card: rgba(255, 255, 255, 0.92);
+      --ink: #1f2937;
+      --muted: #5f6b7a;
+      --line: #d8cdb6;
+      --accent: #0f766e;
+      --accent-soft: #d5f5ef;
+      --warn: #b45309;
+      --warn-soft: #ffedd5;
+      --danger: #b42318;
+      --danger-soft: #fee4e2;
+      --shadow: 0 18px 45px rgba(84, 70, 35, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
+        radial-gradient(circle at top right, rgba(180, 83, 9, 0.10), transparent 24%),
+        linear-gradient(180deg, #fbf7ef 0%, #f3ebdd 100%);
+    }
+    a { color: #0f5f73; }
+    .page-shell {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 28px 16px 56px;
+    }
+    .hero-card, .surface-card {
+      background: var(--card);
+      border: 1px solid rgba(216, 205, 182, 0.85);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+      backdrop-filter: blur(8px);
+    }
+    .hero-card { padding: 24px; margin-bottom: 22px; }
+    .surface-card { padding: 22px; margin-bottom: 18px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .hero-row, .stack-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .nav-links a {
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.08);
+      color: var(--ink);
+    }
+    .nav-links a:hover { background: rgba(15, 118, 110, 0.16); }
+    .button, button, input, select, textarea {
+      font: inherit;
+    }
+    .button, button {
+      border: 0;
+      border-radius: 14px;
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button.secondary, .button.secondary {
+      background: #e7eceb;
+      color: var(--ink);
+    }
+    button.danger, .button.danger {
+      background: var(--danger);
+    }
+    button[disabled] { opacity: 0.7; cursor: progress; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.95);
+      margin-top: 6px;
+    }
+    textarea { min-height: 100px; }
+    label { display: block; font-size: 14px; color: var(--muted); }
+    h1, h2, h3 { margin-top: 0; color: #19212b; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 10px; }
+    h2 { font-size: 1.35rem; margin-bottom: 12px; }
+    p.helper, .helper { color: var(--muted); margin-top: 0; }
+    .grid-2, .grid-3 {
+      display: grid;
+      gap: 16px;
+    }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .flash, .error, .empty-state {
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+    .flash { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(15, 118, 110, 0.14); }
+    .error { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(180, 35, 24, 0.16); }
+    .empty-state { background: #fffaf2; color: var(--muted); border: 1px dashed var(--line); }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.08);
+      color: #24454c;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+    .metric-box {
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+    }
+    .metric-box strong { display: block; font-size: 1.45rem; margin-top: 8px; }
+    .table-shell { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #ede5d8; vertical-align: top; text-align: left; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid #e9dfcd; border-radius: 14px; background: rgba(255,255,255,0.7); margin-bottom: 8px; color: var(--ink); }
+    .choice-list input { width: auto; margin-top: 2px; }
+    .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .inline-form { display: inline; }
+    .muted-link { color: var(--muted); }
+    [data-loading-form][aria-busy="true"] { opacity: 0.88; }
+    @media (max-width: 720px) {
+      .page-shell { padding: 18px 12px 48px; }
+      .hero-card, .surface-card { padding: 18px; border-radius: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">${body}</div>
+  <script>
+    document.addEventListener("submit", function (event) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      form.setAttribute("aria-busy", "true");
+      const submitters = form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]');
+      submitters.forEach(function (button) {
+        if (!(button instanceof HTMLButtonElement || button instanceof HTMLInputElement)) return;
+        if (!button.hasAttribute("data-original-text")) {
+          button.setAttribute("data-original-text", button.textContent || button.value || "");
+        }
+        const loadingText = button.getAttribute("data-loading-text");
+        if (loadingText) {
+          if (button instanceof HTMLButtonElement) button.textContent = loadingText;
+          if (button instanceof HTMLInputElement) button.value = loadingText;
+        }
+        button.disabled = true;
+      });
+    });
+  </script>
+</body>
+</html>`;
 }
 
 function esc(value: string): string {
@@ -180,12 +375,74 @@ async function apiRequest<T>(cookieHeader: string | undefined, path: string, ini
   return (await response.json()) as T;
 }
 
+async function apiRequestDetailed<T>(
+  cookieHeader: string | undefined,
+  path: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string }
+): Promise<{ ok: true; data: T } | { ok: false; status: number; error: string }> {
+  const response = await fetch(`${env.API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...(cookieHeader ? { cookie: cookieHeader } : {}) }
+  });
+
+  if (response.ok) {
+    return { ok: true, data: (await response.json()) as T };
+  }
+
+  let error = "Request failed";
+  try {
+    const payload = (await response.json()) as { error?: string };
+    if (payload?.error) error = payload.error;
+  } catch {
+    // ignore parse failure
+  }
+
+  return { ok: false, status: response.status, error };
+}
+
 function shellNav(user: CurrentUser): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><a href="/dashboard/llm-providers">LLM Providers</a><a href="/dashboard/run-setup">Run Setup</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
+  return `<div class="hero-card">
+    <div class="hero-row">
+      <div>
+        <div class="eyebrow">Demo-Ready MVP</div>
+        <h1>Synthetic User Dashboard</h1>
+        <p class="helper">${esc(user.name)} · ${esc(user.role)} · Org ${esc(user.organizationId)}</p>
+      </div>
+      <div class="nav-links">
+        <a href="/dashboard/projects">Projects</a>
+        <a href="/dashboard/personas">Personas</a>
+        <a href="/dashboard/test-accounts">Test Accounts</a>
+        <a href="/dashboard/workflows">Workflows</a>
+        <a href="/dashboard/llm-providers">LLM Providers</a>
+        <a href="/dashboard/run-setup">Run Setup</a>
+        <form method="post" action="/logout" class="inline-form">
+          <button type="submit" class="secondary" data-loading-text="Signing out...">Log out</button>
+        </form>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderLogin(error?: string): string {
-  return renderPage("Platform Login", `<h1>Dashboard Login</h1>${error ? `<p style="color:#b00020;">${esc(error)}</p>` : ""}<form method="post" action="/login"><label>Email</label><br /><input type="email" name="email" required style="width:100%;margin-bottom:12px;" /><br /><label>Password</label><br /><input type="password" name="password" required style="width:100%;margin-bottom:12px;" /><br /><button type="submit">Sign in</button></form>`);
+  return renderPage(
+    "Platform Login",
+    `<div class="hero-card">
+      <div class="eyebrow">Synthetic User Validation Platform</div>
+      <h1>Dashboard Login</h1>
+      <p class="helper">Use the demo operator account to launch runs, watch live activity, and open the generated report.</p>
+    </div>
+    <div class="surface-card" style="max-width:560px;margin:0 auto;">
+      ${error ? `<div class="error">${esc(error)}</div>` : ""}
+      <form method="post" action="/login">
+        <label>Email<input type="email" name="email" required autocomplete="username" /></label>
+        <label style="margin-top:12px;">Password<input type="password" name="password" required autocomplete="current-password" /></label>
+        <div class="page-actions" style="margin-top:16px;">
+          <button type="submit" data-loading-text="Signing in...">Sign in to dashboard</button>
+          <span class="helper">Default demo account is documented in the README.</span>
+        </div>
+      </form>
+    </div>`
+  );
 }
 
 function renderProjectsPage(user: CurrentUser, projects: Project[], selectedProjectId?: string, flash?: string): string {
@@ -214,10 +471,13 @@ function renderRunDetailPage(args: {
   runId: string;
   events: SimulationEvent[];
   artifacts: Artifact[];
+  findings: Finding[];
   flash?: string;
+  error?: string;
 }): string {
   const initialEvents = JSON.stringify(args.events);
   const initialArtifacts = JSON.stringify(args.artifacts);
+  const initialFindings = JSON.stringify(args.findings);
   return renderPage(
     `Run ${args.runId}`,
     `<script src="https://cdn.tailwindcss.com"></script>
@@ -225,13 +485,33 @@ function renderRunDetailPage(args: {
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
 ${shellNav(args.user)}
-${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
-<div class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-  <div class="mb-5 flex items-center justify-between">
-    <h2 class="text-xl font-semibold text-slate-900">Run Dashboard: ${esc(args.runId)}</h2>
-    <p id="socket-status" class="text-sm text-slate-500">Connecting live feed...</p>
+${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
+${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
+<div class="surface-card">
+  <div class="stack-row">
+    <div>
+      <div class="eyebrow">Live Demo Run</div>
+      <h2 style="margin:10px 0 6px;">Run Dashboard: ${esc(args.runId)}</h2>
+      <p class="helper">Watch agents execute live, inspect one agent at a time, review findings, and open the generated markdown report.</p>
+    </div>
+    <div class="page-actions">
+      <form method="post" action="/dashboard/runs/${esc(args.runId)}/cancel" onsubmit="return window.confirm('Cancel this run? Active agents will stop after queue cancellation and cleanup.');">
+        <button type="submit" class="danger" data-loading-text="Canceling run...">Cancel run</button>
+      </form>
+      <a class="button secondary" href="/dashboard/run-setup">Start another run</a>
+    </div>
   </div>
-  <div id="run-dashboard-root"></div>
+  <div class="pill-row" style="margin-top:14px;">
+    <span class="pill">Live updates</span>
+    <span class="pill">Agent drill-down</span>
+    <span class="pill">Artifacts + report</span>
+  </div>
+  <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="mb-5 flex items-center justify-between">
+      <p id="socket-status" class="text-sm text-slate-500">Connecting live feed...</p>
+    </div>
+    <div id="run-dashboard-root"></div>
+  </div>
 </div>
 <script src="${env.API_BASE_URL}/socket.io/socket.io.js"></script>
 <script>
@@ -239,7 +519,8 @@ window.__RUN_EVENTS_CONFIG__ = {
   runId: ${JSON.stringify(args.runId)},
   apiBaseUrl: ${JSON.stringify(env.API_BASE_URL)},
   initialEvents: ${initialEvents},
-  initialArtifacts: ${initialArtifacts}
+  initialArtifacts: ${initialArtifacts},
+  initialFindings: ${initialFindings}
 };
 </script>
 <script type="module" src="/static/run-events.js"></script>`
@@ -811,12 +1092,6 @@ type RunSetupOptions = {
   budgetPolicies: BudgetPolicy[];
 };
 
-function workflowOptions(workflows: Workflow[]): string {
-  return workflows
-    .map((workflow) => `<option value="${workflow.id}">${esc(workflow.name)} (${esc(workflow.status)})</option>`)
-    .join("");
-}
-
 function personaOptions(personas: Persona[]): string {
   return personas
     .map((persona) => `<label style="display:block;"><input type="checkbox" name="personaIds" value="${persona.id}" /> ${esc(persona.name)} (${esc(persona.role)})</label>`)
@@ -846,61 +1121,155 @@ function renderRunSetupPage(args: {
   const selectedProject =
     args.options.projects.find((project) => project.id === args.selectedProjectId) ?? args.options.projects[0];
   const environments = selectedProject?.environments ?? [];
+  const activeWorkflows = args.workflows.filter((workflow) => workflow.status === "ACTIVE");
+  const availableAccounts = args.testAccounts.filter((account) => account.status !== "DISABLED");
+  const hasSetupPrereqs =
+    args.options.projects.length > 0 &&
+    environments.length > 0 &&
+    activeWorkflows.length > 0 &&
+    args.options.personas.length > 0 &&
+    availableAccounts.length > 0 &&
+    args.options.budgetPolicies.length > 0;
 
   return renderPage(
     "Run Setup",
     `${shellNav(args.user)}
-${args.error ? `<p style="color:#b00020;">${esc(args.error)}</p>` : ""}
-${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
-<h2>Simulation Run Setup</h2>
-<form method="post" action="/dashboard/demo-runs/20-agent" style="margin: 0 0 16px 0;">
-<button type="submit" style="padding:8px 12px;background:#0f766e;color:white;border:0;border-radius:6px;">20-Agent Demo Run</button>
-</form>
-<form method="post" action="/dashboard/run-setup/preview" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-<label>Project
-<select name="projectId" required>
-${args.options.projects
-  .map(
-    (project) =>
-      `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`
-  )
-  .join("")}
-</select>
-</label>
-<label>Environment
-<select name="environmentId" required>
-${environments
-  .map(
-    (environment) =>
-      `<option value="${environment.id}" ${args.selectedEnvironmentId === environment.id ? "selected" : ""}>${esc(environment.name)}</option>`
-  )
-  .join("")}
-</select>
-</label>
-<label>Workflow
-<select name="workflowId" required>${workflowOptions(args.workflows)}</select>
-</label>
-<label>Budget Policy
-<select name="budgetPolicyId" required>
-${args.options.budgetPolicies.map((policy) => `<option value="${policy.id}">${esc(policy.name)}</option>`).join("")}
-</select>
-</label>
-<label>Number of Agents
-<input type="number" min="1" max="100" name="agentCount" value="5" required />
-</label>
-<label>Max Run Duration (seconds)
-<input type="number" min="30" max="7200" name="maxRunDurationSeconds" value="600" required />
-</label>
-<div>
-<h3>Personas</h3>
-${personaOptions(args.options.personas)}
+${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
+${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
+<div class="surface-card">
+  <div class="stack-row">
+    <div>
+      <div class="eyebrow">Demo Launch Flow</div>
+      <h2 style="margin:10px 0 6px;">Simulation Run Setup</h2>
+      <p class="helper">Choose the project, environment, and workflow you want to showcase, then either use the 20-agent demo preset or launch a custom run.</p>
+    </div>
+    <div class="metrics-grid" style="min-width:min(100%, 430px);">
+      <div class="metric-box"><span class="helper">Projects</span><strong>${args.options.projects.length}</strong></div>
+      <div class="metric-box"><span class="helper">Active workflows</span><strong>${activeWorkflows.length}</strong></div>
+      <div class="metric-box"><span class="helper">Available accounts</span><strong>${availableAccounts.length}</strong></div>
+      <div class="metric-box"><span class="helper">Personas</span><strong>${args.options.personas.length}</strong></div>
+    </div>
+  </div>
 </div>
-<div>
-<h3>Test Accounts</h3>
-${testAccountOptions(args.testAccounts)}
+<div class="grid-2">
+  <div class="surface-card">
+    <h2>1. Choose Project and Environment</h2>
+    <p class="helper">These filters only refresh available workflows and test accounts. They do not start a run.</p>
+    <form method="get" action="/dashboard/run-setup" class="grid-2">
+      <label>Project
+        <select name="projectId" required onchange="this.form.submit()">
+        ${args.options.projects
+          .map(
+            (project) =>
+              `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`
+          )
+          .join("")}
+        </select>
+      </label>
+      <label>Environment
+        <select name="environmentId" required onchange="this.form.submit()">
+        ${environments
+          .map(
+            (environment) =>
+              `<option value="${environment.id}" ${args.selectedEnvironmentId === environment.id ? "selected" : ""}>${esc(environment.name)} · ${esc(environment.type)}</option>`
+          )
+          .join("")}
+        </select>
+      </label>
+      <noscript><button type="submit">Refresh options</button></noscript>
+    </form>
+    ${
+      args.options.projects.length === 0
+        ? `<div class="empty-state">No projects found yet. Create a project first, then add an environment before starting a run.</div>`
+        : ""
+    }
+    ${
+      selectedProject && environments.length === 0
+        ? `<div class="empty-state">Project <strong>${esc(selectedProject.name)}</strong> has no environments yet. Add one from the Projects screen to continue.</div>`
+        : ""
+    }
+  </div>
+  <div class="surface-card">
+    <h2>2. 20-Agent Demo Preset</h2>
+    <p class="helper">Fastest path for the live walkthrough. This preset picks the configured demo project, environment, workflow, personas, and accounts automatically.</p>
+    <div class="pill-row" style="margin-bottom:14px;">
+      <span class="pill">20 agents</span>
+      <span class="pill">live dashboard</span>
+      <span class="pill">report included</span>
+    </div>
+    <form method="post" action="/dashboard/demo-runs/20-agent">
+      <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
+      <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+      <input type="hidden" name="workflowId" value="${esc(args.selectedWorkflowId ?? activeWorkflows[0]?.id ?? "")}" />
+      <button type="submit" data-loading-text="Starting demo run...">Start 20-agent demo preset</button>
+    </form>
+  </div>
 </div>
-<button type="submit" style="grid-column:1/-1;">Review Summary</button>
-</form>`
+<div class="surface-card">
+  <h2>3. Custom Run</h2>
+  ${
+    hasSetupPrereqs
+      ? `<form method="post" action="/dashboard/run-setup/preview" class="grid-2">
+        <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
+        <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+        <label>Workflow
+          <select name="workflowId" required>${activeWorkflows
+            .map(
+              (workflow) =>
+                `<option value="${workflow.id}" ${args.selectedWorkflowId === workflow.id ? "selected" : ""}>${esc(workflow.name)} (${esc(workflow.status)})</option>`
+            )
+            .join("")}</select>
+        </label>
+        <label>Budget Policy
+          <select name="budgetPolicyId" required>
+            ${args.options.budgetPolicies.map((policy) => `<option value="${policy.id}">${esc(policy.name)}</option>`).join("")}
+          </select>
+        </label>
+        <label>Number of Agents
+          <input type="number" min="1" max="100" name="agentCount" value="${Math.min(availableAccounts.length, 5)}" required />
+        </label>
+        <label>Max Run Duration (seconds)
+          <input type="number" min="30" max="7200" name="maxRunDurationSeconds" value="600" required />
+        </label>
+        <div>
+          <h3>Personas</h3>
+          <p class="helper">Select one or more personas to distribute across agents.</p>
+          <div class="choice-list">${personaOptions(args.options.personas)}</div>
+        </div>
+        <div>
+          <h3>Test Accounts</h3>
+          <p class="helper">Only non-disabled accounts from the selected environment are shown.</p>
+          <div class="choice-list">${testAccountOptions(availableAccounts)}</div>
+        </div>
+        <div class="page-actions" style="grid-column:1/-1;">
+          <button type="submit" data-loading-text="Preparing summary...">Review run summary</button>
+        </div>
+      </form>`
+      : `<div class="empty-state">
+          The run launcher is waiting on setup data.
+          <div style="margin-top:10px;">
+            ${
+              args.options.projects.length === 0 ? `<div>Need at least one project.</div>` : ``
+            }
+            ${
+              environments.length === 0 ? `<div>Need at least one environment in the selected project.</div>` : ``
+            }
+            ${
+              activeWorkflows.length === 0 ? `<div>Need at least one ACTIVE workflow for the selected project.</div>` : ``
+            }
+            ${
+              args.options.personas.length === 0 ? `<div>Need at least one persona.</div>` : ``
+            }
+            ${
+              availableAccounts.length === 0 ? `<div>Need at least one non-disabled test account in the selected environment.</div>` : ``
+            }
+            ${
+              args.options.budgetPolicies.length === 0 ? `<div>Need at least one active budget policy.</div>` : ``
+            }
+          </div>
+        </div>`
+  }
+</div>`
   );
 }
 
@@ -934,6 +1303,11 @@ app.get("/dashboard/run-setup", async (req, res) => {
         `/api/projects/${selectedProjectId}/workflows`
       )
     : { workflows: [] as Workflow[] };
+  const workflows = workflowsResponse?.workflows ?? [];
+  const selectedWorkflowId =
+    typeof req.query.workflowId === "string"
+      ? req.query.workflowId
+      : workflows.find((workflow) => workflow.status === "ACTIVE")?.id ?? workflows[0]?.id;
 
   const testAccountsResponse = selectedEnvironmentId
     ? await apiRequest<{ testAccounts: TestAccount[] }>(
@@ -954,7 +1328,8 @@ app.get("/dashboard/run-setup", async (req, res) => {
         options,
         selectedProjectId,
         selectedEnvironmentId,
-        workflows: workflowsResponse?.workflows ?? [],
+        selectedWorkflowId,
+        workflows,
         testAccounts: testAccountsResponse?.testAccounts ?? [],
         error,
         flash
@@ -982,9 +1357,25 @@ app.post("/dashboard/run-setup/preview", async (req, res) => {
     renderPage(
       "Run Summary",
       `${shellNav(user)}
-<h2>Run Summary</h2>
-<pre>${esc(JSON.stringify(payload, null, 2))}</pre>
-<form method="post" action="/dashboard/run-setup/start">
+<div class="surface-card">
+  <div class="eyebrow">Preflight Review</div>
+  <h2 style="margin:10px 0 8px;">Run Summary</h2>
+  <p class="helper">Confirm the selection below before creating the run.</p>
+  <div class="table-shell">
+    <table>
+      <tbody>
+        <tr><th>Project</th><td>${esc(payload.projectId)}</td></tr>
+        <tr><th>Environment</th><td>${esc(payload.environmentId)}</td></tr>
+        <tr><th>Workflow</th><td>${esc(payload.workflowId)}</td></tr>
+        <tr><th>Agent count</th><td>${esc(String(payload.agentCount))}</td></tr>
+        <tr><th>Budget policy</th><td>${esc(payload.budgetPolicyId)}</td></tr>
+        <tr><th>Max duration</th><td>${esc(String(payload.maxRunDurationSeconds))} seconds</td></tr>
+        <tr><th>Persona IDs</th><td>${payload.personaIds.length > 0 ? esc(payload.personaIds.join(", ")) : "None selected"}</td></tr>
+        <tr><th>Test account IDs</th><td>${payload.testAccountIds.length > 0 ? esc(payload.testAccountIds.join(", ")) : "None selected"}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/dashboard/run-setup/start" style="margin-top:16px;">
 ${Object.entries(payload)
   .map(([key, value]) => {
     if (Array.isArray(value)) {
@@ -993,9 +1384,12 @@ ${Object.entries(payload)
     return `<input type="hidden" name="${key}" value="${esc(String(value))}" />`;
   })
   .join("")}
-<button type="submit">Start Run (Create Pending)</button>
-</form>
-<a href="/dashboard/run-setup">Back</a>`
+    <div class="page-actions">
+      <button type="submit" data-loading-text="Creating run...">Start run</button>
+      <a class="button secondary" href="/dashboard/run-setup?projectId=${encodeURIComponent(payload.projectId)}&environmentId=${encodeURIComponent(payload.environmentId)}">Back to setup</a>
+    </div>
+  </form>
+</div>`
     )
   );
 });
@@ -1013,31 +1407,39 @@ app.post("/dashboard/run-setup/start", async (req, res) => {
     maxRunDurationSeconds: Number(body.maxRunDurationSeconds ?? 0)
   };
 
-  const response = await apiRequest<{ run?: { id: string } }>(req.headers.cookie, "/api/simulation-runs", {
+  const response = await apiRequestDetailed<{ run?: { id: string } }>(req.headers.cookie, "/api/simulation-runs", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
 
-  if (!response?.run?.id) {
-    return void res.redirect("/dashboard/run-setup?error=Run+configuration+is+invalid");
+  if (!response.ok || !response.data?.run?.id) {
+    const error = response.ok ? "Run configuration is invalid" : response.error;
+    return void res.redirect(`/dashboard/run-setup?error=${encodeURIComponent(error)}`);
   }
 
-  res.redirect(`/dashboard/runs/${response.run.id}?flash=Pending+run+created`);
+  res.redirect(`/dashboard/runs/${response.data.run.id}?flash=Pending+run+created`);
 });
 
 app.post("/dashboard/demo-runs/20-agent", async (req, res) => {
-  const response = await apiRequest<{ run?: { id: string } }>(req.headers.cookie, "/api/demo-runs/20-agent", {
+  const payload = {
+    projectId: String(req.body.projectId ?? "") || undefined,
+    environmentId: String(req.body.environmentId ?? "") || undefined,
+    workflowId: String(req.body.workflowId ?? "") || undefined
+  };
+
+  const response = await apiRequestDetailed<{ run?: { id: string } }>(req.headers.cookie, "/api/demo-runs/20-agent", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({})
+    body: JSON.stringify(payload)
   });
 
-  if (!response?.run?.id) {
-    return void res.redirect("/dashboard/run-setup?error=Unable+to+start+20-agent+demo+run");
+  if (!response.ok || !response.data?.run?.id) {
+    const error = response.ok ? "Unable to start 20-agent demo run" : response.error;
+    return void res.redirect(`/dashboard/run-setup?error=${encodeURIComponent(error)}`);
   }
 
-  res.redirect(`/dashboard/runs/${response.run.id}?flash=20-agent+demo+run+started`);
+  res.redirect(`/dashboard/runs/${response.data.run.id}?flash=20-agent+demo+run+started`);
 });
 
 app.get("/dashboard/runs/:runId", async (req, res) => {
@@ -1053,18 +1455,46 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
     req.headers.cookie,
     `/api/runs/${runId}/artifacts`
   );
+  const findingsResponse = await apiRequest<{ findings: Finding[] }>(
+    req.headers.cookie,
+    `/api/runs/${runId}/findings`
+  );
 
   if (!eventsResponse || !artifactsResponse) {
     return void res
       .status(404)
       .type("html")
-      .send(renderPage("Run Not Found", `${shellNav(user)}<p>Run not found or inaccessible.</p>`));
+      .send(renderPage("Run Not Found", `${shellNav(user)}<div class="error">Run not found or inaccessible.</div>`));
   }
 
   const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  const error = typeof req.query.error === "string" ? req.query.error : undefined;
   res.status(200).type("html").send(
-    renderRunDetailPage({ user, runId, events: eventsResponse.events, artifacts: artifactsResponse.artifacts, flash })
+    renderRunDetailPage({
+      user,
+      runId,
+      events: eventsResponse.events,
+      artifacts: artifactsResponse.artifacts,
+      findings: findingsResponse?.findings ?? [],
+      flash,
+      error
+    })
   );
+});
+
+app.post("/dashboard/runs/:runId/cancel", async (req, res) => {
+  const response = await apiRequestDetailed<{ success: boolean }>(
+    req.headers.cookie,
+    `/api/simulation-runs/${req.params.runId}/cancel`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) }
+  );
+
+  if (!response.ok || !response.data.success) {
+    const error = response.ok ? "Unable to cancel run" : response.error;
+    return void res.redirect(`/dashboard/runs/${req.params.runId}?error=${encodeURIComponent(error)}`);
+  }
+
+  res.redirect(`/dashboard/runs/${req.params.runId}?flash=Run+cancel+requested`);
 });
 
 app.get("/runs/:runId", async (req, res) => {

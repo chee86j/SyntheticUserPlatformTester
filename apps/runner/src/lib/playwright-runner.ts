@@ -194,13 +194,15 @@ async function runAction(
       return { screenshotPath, pageLoadMs };
     }
     case "click":
-      await page.locator(action.selector).first().click();
+      await withFallbackLocator(page, action.selector, (locator) => locator.click());
       return {};
     case "fill":
-      await page.locator(action.selector).first().fill(action.value);
+      await withFallbackLocator(page, action.selector, (locator) => locator.fill(action.value));
       return {};
     case "select":
-      await page.locator(action.selector).first().selectOption(action.value);
+      await withFallbackLocator(page, action.selector, async (locator) => {
+        await locator.selectOption(action.value);
+      });
       return {};
     case "wait":
       await page.waitForTimeout(action.ms);
@@ -226,4 +228,75 @@ function getScreenshotFileName(action: Extract<ScriptedAction, { type: "screensh
   const raw = action.name?.trim() || `step-${fallback}`;
   const safe = raw.replace(/[^a-zA-Z0-9-_]/g, "-");
   return `${safe}.png`;
+}
+
+async function withFallbackLocator(
+  page: Page,
+  rawSelector: string,
+  callback: (locator: ReturnType<Page["locator"]>) => Promise<void>
+): Promise<void> {
+  const selectors = splitSelectorList(rawSelector);
+  let lastError: unknown;
+
+  for (const selector of selectors) {
+    try {
+      await callback(page.locator(selector).first());
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Unable to interact with selector "${rawSelector}"`);
+}
+
+export function splitSelectorList(rawSelector: string): string[] {
+  const selectors: string[] = [];
+  let current = "";
+  let bracketDepth = 0;
+  let quote: '"' | "'" | null = null;
+
+  for (const character of rawSelector) {
+    if (quote) {
+      current += character;
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character;
+      current += character;
+      continue;
+    }
+
+    if (character === "[") {
+      bracketDepth += 1;
+      current += character;
+      continue;
+    }
+
+    if (character === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      current += character;
+      continue;
+    }
+
+    if (character === "," && bracketDepth === 0) {
+      const selector = current.trim();
+      if (selector) selectors.push(selector);
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  const selector = current.trim();
+  if (selector) selectors.push(selector);
+
+  return selectors.length > 0 ? selectors : [rawSelector.trim()].filter(Boolean);
 }

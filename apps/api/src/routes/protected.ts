@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, FindingRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { LlmProviderConfigRepository } from "@synthetic/database";
 import { createLlmProvider } from "@synthetic/llm-gateway";
 import {
@@ -38,6 +38,7 @@ const runRepository = new RunRepository();
 const budgetPolicyRepository = new BudgetPolicyRepository();
 const eventRepository = new EventRepository();
 const artifactRepository = new ArtifactRepository();
+const findingRepository = new FindingRepository();
 const llmProviderConfigRepository = new LlmProviderConfigRepository();
 const llmGatewayService = new LlmGatewayService();
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
@@ -77,6 +78,11 @@ const environmentParamsSchema = z.object({
 
 const testConnectionBodySchema = z.object({ timeoutMs: z.number().int().positive().max(10000).optional() });
 const runIdParamsSchema = z.object({ runId: z.string().uuid() });
+const demoRunPresetSchema = z.object({
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  workflowId: z.string().uuid().optional()
+});
 const llmProviderSchema = z.enum(["openai", "anthropic"]);
 const llmConfigCreateSchema = z.object({
   provider: llmProviderSchema,
@@ -1024,15 +1030,24 @@ protectedRouter.post("/demo-runs/20-agent", requireRole("OWNER", "ADMIN", "TESTE
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
+  const parsed = demoRunPresetSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid demo preset payload" });
+
   const projects = await projectRepository.listByOrganization(user.organizationId);
-  const project = projects[0];
+  const project = parsed.data.projectId
+    ? projects.find((item) => item.id === parsed.data.projectId)
+    : projects[0];
   if (!project) return void res.status(400).json({ error: "No project found for demo run" });
 
-  const environment = (project.environments ?? [])[0];
+  const environment = parsed.data.environmentId
+    ? (project.environments ?? []).find((item) => item.id === parsed.data.environmentId)
+    : (project.environments ?? [])[0];
   if (!environment) return void res.status(400).json({ error: "No environment found for demo run" });
 
   const workflows = await workflowRepository.listByProjectForOrganization(project.id, user.organizationId);
-  const workflow = workflows.find((item) => item.status === "ACTIVE");
+  const workflow = parsed.data.workflowId
+    ? workflows.find((item) => item.id === parsed.data.workflowId && item.status === "ACTIVE")
+    : workflows.find((item) => item.status === "ACTIVE");
   if (!workflow) return void res.status(400).json({ error: "No ACTIVE workflow found for demo run" });
 
   const personas = await personaRepository.listByOrganization(user.organizationId);
@@ -1314,6 +1329,22 @@ protectedRouter.get("/runs/:runId/budget-summary", async (req: AuthenticatedRequ
   const summary = await llmGatewayService.getRunBudgetSummary(params.data.runId, user.organizationId);
   if (!summary) return void res.status(404).json({ error: "Run not found" });
   res.json({ summary });
+});
+
+protectedRouter.get("/runs/:runId/findings", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const findings = await findingRepository.listByRunForOrganization(params.data.runId, user.organizationId);
+  res.json({ findings });
 });
 
 protectedRouter.get("/runs/:runId/artifacts", async (req: AuthenticatedRequest, res) => {
