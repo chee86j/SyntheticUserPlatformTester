@@ -3,6 +3,13 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "./config.js";
 import type { ScriptedAction } from "./actions.js";
 
+export class ProductWorkflowError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductWorkflowError";
+  }
+}
+
 type EmitFn = (input: {
   eventType:
     | "action.started"
@@ -99,7 +106,8 @@ export async function executeScriptedWorkflow(input: {
             error: error instanceof Error ? error.message : "Unknown action error"
           }
         });
-        throw error;
+        const message = error instanceof Error ? error.message : "Unknown action error";
+        throw new ProductWorkflowError(message);
       }
     }
 

@@ -1,11 +1,13 @@
 import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { personaCreateSchema, personaUpdateSchema, runSetupSchema, simulationEventSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
+import { RunStatus } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
 import { encryptSecret } from "../auth/secret-encryption.js";
 import { emitRunEvent } from "../realtime/socket.js";
+import { cancelRunJobs, enqueueSimulationRun } from "../queues/queues.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -892,7 +894,25 @@ protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) 
     maxRunDurationSeconds: input.maxRunDurationSeconds
   });
 
+  await enqueueSimulationRun(run.id);
   res.status(201).json({ run });
+});
+
+protectedRouter.post("/simulation-runs/:runId/cancel", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  await runRepository.updateStatus(run.id, RunStatus.CANCELED);
+  await cancelRunJobs(run.id);
+  res.json({ success: true });
 });
 
 protectedRouter.post("/events", async (req: AuthenticatedRequest, res) => {

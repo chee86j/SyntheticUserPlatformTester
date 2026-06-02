@@ -377,14 +377,20 @@ export class RunRepository {
     });
   }
 
-  async createAgent(input: { simulationRunId: string; personaId?: string; testAccountId?: string }) {
+  async createAgent(input: {
+    simulationRunId: string;
+    personaId?: string;
+    testAccountId?: string;
+    status?: "IDLE" | "RUNNING" | "COMPLETED" | "FAILED";
+    startedAt?: Date | null;
+  }) {
     return prisma.simulationAgent.create({
       data: {
         simulationRunId: input.simulationRunId,
         personaId: input.personaId ?? null,
         testAccountId: input.testAccountId ?? null,
-        status: "RUNNING",
-        startedAt: new Date()
+        status: input.status ?? "RUNNING",
+        startedAt: input.startedAt ?? new Date()
       }
     });
   }
@@ -405,6 +411,10 @@ export class RunRepository {
 
   async getAgentById(agentId: string) {
     return prisma.simulationAgent.findUnique({ where: { id: agentId } });
+  }
+
+  async listAgentsByRun(runId: string) {
+    return prisma.simulationAgent.findMany({ where: { simulationRunId: runId }, orderBy: { createdAt: "asc" } });
   }
 }
 

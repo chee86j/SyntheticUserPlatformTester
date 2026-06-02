@@ -21,6 +21,7 @@ export {
 } from "./workflow.js";
 
 export { runSetupSchema } from "./run-setup.js";
+export { QUEUE_NAMES } from "./queues.js";
 export {
   simulationEventSchema,
   simulationEventTypeSchema,

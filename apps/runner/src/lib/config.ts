@@ -4,6 +4,7 @@ import { z } from "zod";
 const envSchema = z.object({
   RUNNER_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_BASE_URL: z.string().url(),
+  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
   AUTH_COOKIE_NAME: z.string().min(1).default("sup_session"),
   RUNNER_API_EMAIL: z.string().email().default("admin@syntheticlabs.local"),
   RUNNER_API_PASSWORD: z.string().min(1).default("ChangeMe123!"),
@@ -12,6 +13,7 @@ const envSchema = z.object({
   RUNNER_HEADLESS: z.coerce.boolean().default(true),
   RUNNER_SLOW_MO_MS: z.coerce.number().int().min(0).max(5000).default(0),
   RUNNER_NAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(20000),
+  MAX_PARALLEL_AGENTS: z.coerce.number().int().min(1).max(50).default(3),
   RUNNER_RECORD_VIDEO: z.coerce.boolean().default(false),
   RUNNER_DEFAULT_PASSWORD: z.string().min(1).default("Password123!"),
   TEST_ACCOUNT_ENCRYPTION_KEY: z.string().min(32),
