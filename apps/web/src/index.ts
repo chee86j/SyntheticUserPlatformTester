@@ -734,6 +734,9 @@ function renderRunSetupPage(args: {
 ${args.error ? `<p style="color:#b00020;">${esc(args.error)}</p>` : ""}
 ${args.flash ? `<p style="color:#0a5;">${esc(args.flash)}</p>` : ""}
 <h2>Simulation Run Setup</h2>
+<form method="post" action="/dashboard/demo-runs/20-agent" style="margin: 0 0 16px 0;">
+<button type="submit" style="padding:8px 12px;background:#0f766e;color:white;border:0;border-radius:6px;">20-Agent Demo Run</button>
+</form>
 <form method="post" action="/dashboard/run-setup/preview" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
 <label>Project
 <select name="projectId" required>
@@ -902,6 +905,20 @@ app.post("/dashboard/run-setup/start", async (req, res) => {
   }
 
   res.redirect(`/dashboard/runs/${response.run.id}?flash=Pending+run+created`);
+});
+
+app.post("/dashboard/demo-runs/20-agent", async (req, res) => {
+  const response = await apiRequest<{ run?: { id: string } }>(req.headers.cookie, "/api/demo-runs/20-agent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({})
+  });
+
+  if (!response?.run?.id) {
+    return void res.redirect("/dashboard/run-setup?error=Unable+to+start+20-agent+demo+run");
+  }
+
+  res.redirect(`/dashboard/runs/${response.run.id}?flash=20-agent+demo+run+started`);
 });
 
 app.get("/dashboard/runs/:runId", async (req, res) => {

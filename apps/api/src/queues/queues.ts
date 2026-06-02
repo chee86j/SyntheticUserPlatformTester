@@ -20,6 +20,20 @@ export async function enqueueSimulationRun(runId: string): Promise<void> {
   );
 }
 
+export async function enqueueAgentJob(input: { runId: string; agentId: string }): Promise<void> {
+  await agentJobsQueue.add(
+    "run-agent",
+    { runId: input.runId, agentId: input.agentId },
+    {
+      jobId: `agent:${input.agentId}`,
+      removeOnComplete: true,
+      removeOnFail: 200,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 1500 }
+    }
+  );
+}
+
 export async function cancelRunJobs(runId: string): Promise<void> {
   const simulationJob = await simulationRunsQueue.getJob(`simulation-run:${runId}`);
   if (simulationJob) await simulationJob.remove();

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
 import { encryptSecret } from "../auth/secret-encryption.js";
 import { emitRunEvent } from "../realtime/socket.js";
-import { cancelRunJobs, enqueueSimulationRun } from "../queues/queues.js";
+import { cancelRunJobs, enqueueAgentJob, enqueueSimulationRun } from "../queues/queues.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -796,6 +796,107 @@ protectedRouter.get("/run-setup/options", async (req: AuthenticatedRequest, res)
   const budgetPolicies = await budgetPolicyRepository.listByOrganization(user.organizationId);
 
   res.json({ projects, personas, budgetPolicies });
+});
+
+protectedRouter.post("/demo-runs/20-agent", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const projects = await projectRepository.listByOrganization(user.organizationId);
+  const project = projects[0];
+  if (!project) return void res.status(400).json({ error: "No project found for demo run" });
+
+  const environment = (project.environments ?? [])[0];
+  if (!environment) return void res.status(400).json({ error: "No environment found for demo run" });
+
+  const workflows = await workflowRepository.listByProjectForOrganization(project.id, user.organizationId);
+  const workflow = workflows.find((item) => item.status === "ACTIVE");
+  if (!workflow) return void res.status(400).json({ error: "No ACTIVE workflow found for demo run" });
+
+  const personas = await personaRepository.listByOrganization(user.organizationId);
+  if (personas.length === 0) return void res.status(400).json({ error: "No personas found for demo run" });
+
+  const personaByRole = {
+    lowTechHealthcare: personas.find((persona) => {
+      const role = `${persona.role} ${persona.industry}`.toLowerCase();
+      return role.includes("health") || role.includes("nurse") || role.includes("clinical");
+    }),
+    powerUser: personas.find((persona) => persona.technicalProficiency >= 75),
+    impatientUser: personas.find((persona) => persona.patience <= 35 || persona.timePressure >= 75),
+    adminUser: personas.find((persona) => persona.role.toLowerCase().includes("admin")),
+    mobileUser: personas.find((persona) =>
+      persona.accessibilityNeeds.some((need) => need.toLowerCase().includes("touch"))
+    )
+  };
+
+  const archetypePool = [
+    personaByRole.lowTechHealthcare,
+    personaByRole.powerUser,
+    personaByRole.impatientUser,
+    personaByRole.adminUser,
+    personaByRole.mobileUser
+  ].filter((persona): persona is NonNullable<typeof persona> => Boolean(persona));
+
+  const fallbackPersonas = personas.slice(0, 5);
+  const pool = archetypePool.length > 0 ? archetypePool : fallbackPersonas;
+  if (pool.length === 0) return void res.status(400).json({ error: "Unable to build persona pool" });
+
+  const accounts = await testAccountRepository.listByEnvironmentForOrganization(
+    environment.id,
+    user.organizationId
+  );
+
+  const available = accounts.filter((account) => {
+    if (account.status !== "AVAILABLE") return false;
+    if (account.allowConcurrentUse) return true;
+    return account.reservations.length === 0;
+  });
+
+  if (available.length < 20) {
+    return void res.status(400).json({ error: "Need at least 20 available test accounts for demo run" });
+  }
+
+  const selectedAccounts = available.slice(0, 20);
+  const assignedPersonaIds = Array.from({ length: 20 }, (_, index) => pool[index % pool.length].id);
+
+  const run = await runRepository.createPending({
+    organizationId: user.organizationId,
+    projectId: project.id,
+    environmentId: environment.id,
+    workflowId: workflow.id,
+    createdByUserId: user.id,
+    selectedPersonaIds: assignedPersonaIds,
+    selectedTestAccountIds: selectedAccounts.map((account) => account.id),
+    requestedAgentCount: 20,
+    maxRunDurationSeconds: 600
+  });
+
+  await runRepository.updateStatus(run.id, RunStatus.RUNNING);
+  const runStartedEvent = await eventRepository.create({
+    organizationId: user.organizationId,
+    runId: run.id,
+    eventType: "run.started",
+    payload: { preset: "20-agent-demo", requestedAgents: 20 }
+  });
+  emitRunEvent(run.id, runStartedEvent);
+
+  const agentRecords = [];
+  for (let index = 0; index < 20; index += 1) {
+    const agent = await runRepository.createAgent({
+      simulationRunId: run.id,
+      personaId: assignedPersonaIds[index],
+      testAccountId: selectedAccounts[index].id,
+      status: "IDLE",
+      startedAt: null
+    });
+    agentRecords.push(agent);
+  }
+
+  await Promise.all(
+    agentRecords.map((agent) => enqueueAgentJob({ runId: run.id, agentId: agent.id }))
+  );
+
+  res.status(201).json({ run, agentsCreated: agentRecords.length });
 });
 
 protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) => {
