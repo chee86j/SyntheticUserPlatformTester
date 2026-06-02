@@ -64,6 +64,19 @@ type Persona = {
   behaviorNotes: string;
 };
 
+type LlmProviderConfig = {
+  id: string;
+  provider: "openai" | "anthropic";
+  model: string;
+  baseUrl: string | null;
+  timeoutMs: number | null;
+  status: "inactive" | "active" | "error";
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  isActive: boolean;
+  hasApiKey: boolean;
+};
+
 type SimulationEvent = {
   id: string;
   runId: string;
@@ -168,7 +181,7 @@ async function apiRequest<T>(cookieHeader: string | undefined, path: string, ini
 }
 
 function shellNav(user: CurrentUser): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><a href="/dashboard/run-setup">Run Setup</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><h1>Synthetic User Dashboard</h1><p>${esc(user.name)} (${esc(user.role)})</p></div><div style="display:flex;gap:12px;"><a href="/dashboard/projects">Projects</a><a href="/dashboard/personas">Personas</a><a href="/dashboard/test-accounts">Test Accounts</a><a href="/dashboard/workflows">Workflows</a><a href="/dashboard/llm-providers">LLM Providers</a><a href="/dashboard/run-setup">Run Setup</a><form method="post" action="/logout"><button type="submit">Log out</button></form></div></div>`;
 }
 
 function renderLogin(error?: string): string {
@@ -677,6 +690,112 @@ app.post("/dashboard/workflows/:workflowId/delete", async (req, res) => {
     method: "DELETE"
   });
   res.redirect(`/dashboard/workflows?projectId=${projectId}&flash=Workflow+deleted`);
+});
+
+function renderLlmProvidersPage(
+  user: CurrentUser,
+  configs: LlmProviderConfig[],
+  flash?: string,
+  error?: string
+): string {
+  const rows = configs
+    .map(
+      (config) => `<tr>
+<td>${esc(config.provider)}</td>
+<td>${esc(config.model)}</td>
+<td>${esc(config.baseUrl ?? "-")}</td>
+<td>${esc(String(config.timeoutMs ?? 30000))}</td>
+<td>${esc(config.status)}</td>
+<td>${esc(config.lastCheckedAt ? new Date(config.lastCheckedAt).toLocaleString() : "-")}</td>
+<td style="max-width:220px;">${esc(config.lastError ?? "-")}</td>
+<td>
+  <form method="post" action="/dashboard/llm-providers/${config.id}/test" style="display:inline;">
+    <button type="submit">Test Connection</button>
+  </form>
+</td>
+</tr>`
+    )
+    .join("\n");
+
+  return renderPage(
+    "LLM Providers",
+    `${shellNav(user)}
+${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
+${error ? `<p style="color:#b00020;">${esc(error)}</p>` : ""}
+<h2>Add Provider Configuration</h2>
+<form method="post" action="/dashboard/llm-providers" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+  <label>Provider
+    <select name="provider">
+      <option value="openai">openai</option>
+      <option value="anthropic">anthropic</option>
+    </select>
+  </label>
+  <label>Model
+    <input name="model" placeholder="gpt-4o-mini or claude-3-5-haiku-latest" required />
+  </label>
+  <label>API Key
+    <input type="password" name="apiKey" required />
+  </label>
+  <label>Base URL (optional)
+    <input name="baseUrl" placeholder="https://api.openai.com/v1" />
+  </label>
+  <label>Timeout (ms)
+    <input name="timeoutMs" type="number" min="1000" max="120000" value="30000" />
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="inactive">inactive</option>
+      <option value="active">active</option>
+      <option value="error">error</option>
+    </select>
+  </label>
+  <button type="submit" style="grid-column:1/-1;">Save Provider</button>
+</form>
+<h2>Provider Configurations</h2>
+<table style="width:100%;"><thead><tr><th>Provider</th><th>Model</th><th>Base URL</th><th>Timeout</th><th>Status</th><th>Last Checked</th><th>Last Error</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No provider configs yet.</td></tr>'}</tbody></table>`
+  );
+}
+
+app.get("/dashboard/llm-providers", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const response = await apiRequest<{ configs: LlmProviderConfig[] }>(req.headers.cookie, "/api/llm/providers");
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  const error = typeof req.query.error === "string" ? req.query.error : undefined;
+
+  res.status(200).type("html").send(renderLlmProvidersPage(user, response?.configs ?? [], flash, error));
+});
+
+app.post("/dashboard/llm-providers", async (req, res) => {
+  const payload = {
+    provider: String(req.body.provider ?? "openai"),
+    model: String(req.body.model ?? ""),
+    apiKey: String(req.body.apiKey ?? ""),
+    baseUrl: String(req.body.baseUrl ?? "") || undefined,
+    timeoutMs: Number(req.body.timeoutMs ?? 30000),
+    status: String(req.body.status ?? "inactive")
+  };
+
+  const response = await apiRequest(req.headers.cookie, "/api/llm/providers", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response) return void res.redirect("/dashboard/llm-providers?error=Unable+to+save+provider");
+  res.redirect("/dashboard/llm-providers?flash=Provider+saved");
+});
+
+app.post("/dashboard/llm-providers/:configId/test", async (req, res) => {
+  const response = await apiRequest<{ ok: boolean }>(
+    req.headers.cookie,
+    `/api/llm/providers/${req.params.configId}/test`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) }
+  );
+
+  if (!response?.ok) return void res.redirect("/dashboard/llm-providers?error=Provider+test+failed");
+  res.redirect("/dashboard/llm-providers?flash=Provider+connection+successful");
 });
 
 

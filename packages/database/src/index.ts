@@ -9,6 +9,7 @@ export {
   EnvironmentRepository,
   TestAccountRepository,
   BudgetPolicyRepository,
+  LlmProviderConfigRepository,
   disconnectDatabaseClient
 } from "./repositories/index.js";
 

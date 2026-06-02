@@ -18,6 +18,7 @@ import type {
   SimulationEventType
 } from "@synthetic/shared";
 import { canReserveAccount } from "./test-account-reservation.js";
+import type { LlmProviderConfigCreateInput, LlmProviderConfigUpdateInput } from "./llm-types.js";
 
 export type PlatformRole = "OWNER" | "ADMIN" | "TESTER" | "VIEWER";
 
@@ -425,6 +426,41 @@ export class BudgetPolicyRepository {
 
   async findByIdForOrganization(id: string, organizationId: string) {
     return prisma.budgetPolicy.findFirst({ where: { id, organizationId, isActive: true } });
+  }
+}
+
+export class LlmProviderConfigRepository {
+  async listByOrganization(organizationId: string) {
+    return prisma.llmProviderConfig.findMany({
+      where: { organizationId, isActive: true },
+      orderBy: { createdAt: "asc" }
+    });
+  }
+
+  async findByIdForOrganization(id: string, organizationId: string) {
+    return prisma.llmProviderConfig.findFirst({ where: { id, organizationId, isActive: true } });
+  }
+
+  async create(input: LlmProviderConfigCreateInput) {
+    return prisma.llmProviderConfig.create({
+      data: {
+        organizationId: input.organizationId,
+        provider: input.provider,
+        model: input.model,
+        encryptedApiKey: input.encryptedApiKey,
+        baseUrl: input.baseUrl,
+        timeoutMs: input.timeoutMs ?? 30000,
+        status: input.status ?? "inactive",
+        isActive: input.isActive ?? true
+      }
+    });
+  }
+
+  async updateForOrganization(id: string, organizationId: string, input: LlmProviderConfigUpdateInput) {
+    return prisma.llmProviderConfig.updateMany({
+      where: { id, organizationId, isActive: true },
+      data: input
+    });
   }
 }
 

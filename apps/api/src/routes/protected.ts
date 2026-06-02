@@ -1,11 +1,13 @@
 import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { LlmProviderConfigRepository } from "@synthetic/database";
+import { createLlmProvider } from "@synthetic/llm-gateway";
 import { personaCreateSchema, personaUpdateSchema, runSetupSchema, simulationEventSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
 import { RunStatus } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
-import { encryptSecret } from "../auth/secret-encryption.js";
+import { decryptSecret, encryptSecret } from "../auth/secret-encryption.js";
 import { emitRunEvent } from "../realtime/socket.js";
 import { cancelRunJobs, enqueueAgentJob, enqueueSimulationRun } from "../queues/queues.js";
 
@@ -18,6 +20,7 @@ const runRepository = new RunRepository();
 const budgetPolicyRepository = new BudgetPolicyRepository();
 const eventRepository = new EventRepository();
 const artifactRepository = new ArtifactRepository();
+const llmProviderConfigRepository = new LlmProviderConfigRepository();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -51,6 +54,25 @@ const environmentParamsSchema = z.object({
 
 const testConnectionBodySchema = z.object({ timeoutMs: z.number().int().positive().max(10000).optional() });
 const runIdParamsSchema = z.object({ runId: z.string().uuid() });
+const llmProviderSchema = z.enum(["openai", "anthropic"]);
+const llmConfigCreateSchema = z.object({
+  provider: llmProviderSchema,
+  model: z.string().trim().min(1).max(120),
+  apiKey: z.string().trim().min(8),
+  baseUrl: z.string().url().optional(),
+  timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+  status: z.enum(["inactive", "active", "error"]).default("inactive")
+});
+const llmConfigUpdateSchema = z.object({
+  provider: llmProviderSchema.optional(),
+  model: z.string().trim().min(1).max(120).optional(),
+  apiKey: z.string().trim().min(8).optional(),
+  baseUrl: z.string().url().nullable().optional(),
+  timeoutMs: z.number().int().min(1000).max(120000).optional(),
+  status: z.enum(["inactive", "active", "error"]).optional(),
+  isActive: z.boolean().optional()
+});
+const llmConfigIdParamsSchema = z.object({ configId: z.string().uuid() });
 
 function normalizeAllowedDomains(rawDomains: string[]): string[] {
   const normalized = rawDomains
@@ -796,6 +818,135 @@ protectedRouter.get("/run-setup/options", async (req: AuthenticatedRequest, res)
   const budgetPolicies = await budgetPolicyRepository.listByOrganization(user.organizationId);
 
   res.json({ projects, personas, budgetPolicies });
+});
+
+protectedRouter.get("/llm/providers", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const configs = await llmProviderConfigRepository.listByOrganization(user.organizationId);
+  res.json({
+    configs: configs.map((config) => ({
+      ...config,
+      encryptedApiKey: undefined,
+      hasApiKey: true
+    }))
+  });
+});
+
+protectedRouter.post("/llm/providers", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = llmConfigCreateSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid provider config payload" });
+
+  const created = await llmProviderConfigRepository.create({
+    organizationId: user.organizationId,
+    provider: parsed.data.provider,
+    model: parsed.data.model,
+    encryptedApiKey: encryptSecret(parsed.data.apiKey),
+    baseUrl: parsed.data.baseUrl,
+    timeoutMs: parsed.data.timeoutMs,
+    status: parsed.data.status,
+    isActive: true
+  });
+
+  res.status(201).json({
+    config: {
+      ...created,
+      encryptedApiKey: undefined,
+      hasApiKey: true
+    }
+  });
+});
+
+protectedRouter.patch("/llm/providers/:configId", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = llmConfigIdParamsSchema.safeParse(req.params);
+  const parsed = llmConfigUpdateSchema.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    return void res.status(400).json({ error: "Invalid provider update payload" });
+  }
+
+  const updatePayload: Record<string, unknown> = { ...parsed.data };
+  if (parsed.data.apiKey) {
+    updatePayload.encryptedApiKey = encryptSecret(parsed.data.apiKey);
+    delete updatePayload.apiKey;
+  }
+
+  const result = await llmProviderConfigRepository.updateForOrganization(
+    params.data.configId,
+    user.organizationId,
+    updatePayload
+  );
+
+  if (result.count === 0) return void res.status(404).json({ error: "Provider config not found" });
+
+  const updated = await llmProviderConfigRepository.findByIdForOrganization(params.data.configId, user.organizationId);
+  res.json({
+    config: updated
+      ? {
+          ...updated,
+          encryptedApiKey: undefined,
+          hasApiKey: true
+        }
+      : null
+  });
+});
+
+protectedRouter.post("/llm/providers/:configId/test", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = llmConfigIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid provider config id" });
+
+  const config = await llmProviderConfigRepository.findByIdForOrganization(params.data.configId, user.organizationId);
+  if (!config) return void res.status(404).json({ error: "Provider config not found" });
+
+  try {
+    const provider = createLlmProvider({
+      provider: config.provider as "openai" | "anthropic",
+      model: config.model,
+      apiKey: decryptSecret(config.encryptedApiKey),
+      baseUrl: config.baseUrl ?? undefined,
+      timeoutMs: config.timeoutMs ?? undefined
+    });
+
+    const completion = await provider.complete({
+      prompt: "Return the single word: pong",
+      temperature: 0,
+      maxTokens: 12,
+      responseFormat: "text"
+    });
+
+    await llmProviderConfigRepository.updateForOrganization(config.id, user.organizationId, {
+      status: "active",
+      lastCheckedAt: new Date(),
+      lastError: null
+    });
+
+    res.json({
+      ok: true,
+      response: {
+        text: completion.text,
+        inputTokens: completion.inputTokens,
+        outputTokens: completion.outputTokens,
+        estimatedCost: completion.estimatedCost
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown provider error";
+    await llmProviderConfigRepository.updateForOrganization(config.id, user.organizationId, {
+      status: "error",
+      lastCheckedAt: new Date(),
+      lastError: message.slice(0, 500)
+    });
+    res.status(400).json({ ok: false, error: "Provider test failed", detail: message.slice(0, 300) });
+  }
 });
 
 protectedRouter.post("/demo-runs/20-agent", async (req: AuthenticatedRequest, res) => {

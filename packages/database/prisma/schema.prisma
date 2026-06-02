@@ -316,6 +316,12 @@ model LlmProviderConfig {
   organizationId String
   provider       String
   model          String
+  encryptedApiKey String
+  baseUrl        String?
+  timeoutMs      Int?          @default(30000)
+  status         String        @default("inactive")
+  lastCheckedAt  DateTime?
+  lastError      String?
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
