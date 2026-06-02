@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, FindingRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
+import { ActualMetricsImportRepository, ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, FindingRepository, PersonaRepository, PredictionAccuracyRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { LlmProviderConfigRepository } from "@synthetic/database";
 import { createLlmProvider } from "@synthetic/llm-gateway";
 import {
@@ -28,6 +28,8 @@ import { emitRunEvent } from "../realtime/socket.js";
 import { cancelRunJobs, enqueueAgentJob, enqueueSimulationRun } from "../queues/queues.js";
 import { LlmGatewayService } from "../services/llm-gateway-service.js";
 import { RunCreateRateLimiter } from "../services/run-create-rate-limiter.js";
+import { parseActualMetricsCsv } from "../services/actual-metrics-csv.js";
+import { calculateGapPercent, deriveSyntheticPredictionMetrics } from "../services/prediction-accuracy-service.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -39,6 +41,8 @@ const budgetPolicyRepository = new BudgetPolicyRepository();
 const eventRepository = new EventRepository();
 const artifactRepository = new ArtifactRepository();
 const findingRepository = new FindingRepository();
+const actualMetricsImportRepository = new ActualMetricsImportRepository();
+const predictionAccuracyRepository = new PredictionAccuracyRepository();
 const llmProviderConfigRepository = new LlmProviderConfigRepository();
 const llmGatewayService = new LlmGatewayService();
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
@@ -110,6 +114,18 @@ const llmCompleteSchema = z.object({
   maxTokens: z.number().int().positive().max(8192).optional(),
   temperature: z.number().min(0).max(2).optional(),
   responseFormat: z.enum(["text", "json"]).default("text")
+});
+const actualMetricsImportSchema = z.object({
+  projectId: z.string().uuid(),
+  environmentId: z.string().uuid(),
+  sourceLabel: z.string().trim().min(1).max(120),
+  notes: z.string().trim().max(2000).optional().default(""),
+  csvText: z.string().min(1)
+});
+const actualMetricsComparisonQuerySchema = z.object({
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  workflowId: z.string().uuid().optional()
 });
 
 async function ensureProjectInOrg(projectId: string, organizationId: string) {
@@ -1026,6 +1042,222 @@ protectedRouter.post("/llm/complete", requireRole("OWNER", "ADMIN", "TESTER"), a
   }
 });
 
+protectedRouter.get("/actual-metrics/imports", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = actualMetricsComparisonQuerySchema.safeParse(req.query);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid actual metrics filter" });
+
+  const imports = await actualMetricsImportRepository.listByEnvironmentForOrganization({
+    organizationId: user.organizationId,
+    projectId: parsed.data.projectId,
+    environmentId: parsed.data.environmentId
+  });
+
+  res.json({ imports });
+});
+
+protectedRouter.post("/actual-metrics/import-csv", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = actualMetricsImportSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid actual metrics import payload" });
+
+  const project = await projectRepository.findByIdForOrganization(parsed.data.projectId, user.organizationId);
+  if (!project) return void res.status(404).json({ error: "Project not found" });
+
+  const environment = await environmentRepository.findByIdForProjectAndOrganization(
+    parsed.data.environmentId,
+    parsed.data.projectId,
+    user.organizationId
+  );
+  if (!environment) return void res.status(404).json({ error: "Environment not found in project" });
+
+  try {
+    const workflows = await workflowRepository.listByProjectForOrganization(parsed.data.projectId, user.organizationId);
+    const workflowByName = new Map(workflows.map((workflow) => [workflow.name.trim().toLowerCase(), workflow]));
+    const rows = parseActualMetricsCsv(parsed.data.csvText);
+
+    const metrics = rows.map((row) => {
+      const workflow = workflowByName.get(row.workflowName.trim().toLowerCase());
+      if (!workflow) {
+        throw new Error(`Row ${row.rowNumber}: workflow "${row.workflowName}" was not found in this project`);
+      }
+
+      return {
+        workflowId: workflow.id,
+        periodStart: row.periodStart,
+        periodEnd: row.periodEnd,
+        taskSuccessRate: row.taskSuccessRate,
+        completionTimeMs: row.completionTimeMs,
+        errorRate: row.errorRate,
+        apiCallsPerSession: row.apiCallsPerSession,
+        supportTicketCount: row.supportTicketCount
+      };
+    });
+
+    const periodStart = new Date(Math.min(...metrics.map((row) => row.periodStart.getTime())));
+    const periodEnd = new Date(Math.max(...metrics.map((row) => row.periodEnd.getTime())));
+
+    const createdImport = await actualMetricsImportRepository.createWithMetrics({
+      organizationId: user.organizationId,
+      projectId: parsed.data.projectId,
+      environmentId: parsed.data.environmentId,
+      importedByUserId: user.id,
+      sourceLabel: parsed.data.sourceLabel,
+      notes: parsed.data.notes,
+      periodStart,
+      periodEnd,
+      metrics: metrics.map((metric) => ({
+        workflowId: metric.workflowId,
+        taskSuccessRate: metric.taskSuccessRate,
+        completionTimeMs: metric.completionTimeMs,
+        errorRate: metric.errorRate,
+        apiCallsPerSession: metric.apiCallsPerSession,
+        supportTicketCount: metric.supportTicketCount
+      }))
+    });
+
+    const predictionRows = [];
+    for (const metric of createdImport.workflowMetrics) {
+      const latestRun = await runRepository.findLatestCompletedForWorkflow({
+        organizationId: user.organizationId,
+        projectId: createdImport.projectId,
+        environmentId: createdImport.environmentId,
+        workflowId: metric.workflowId
+      });
+
+      if (!latestRun) continue;
+
+      const events = await eventRepository.listByRunForOrganization(latestRun.id, user.organizationId);
+      const synthetic = deriveSyntheticPredictionMetrics({
+        requestedAgentCount: latestRun.requestedAgentCount,
+        agents: latestRun.agents,
+        events,
+        findings: latestRun.findings
+      });
+
+      predictionRows.push({
+        organizationId: user.organizationId,
+        actualMetricsImportId: createdImport.id,
+        actualWorkflowMetricId: metric.id,
+        simulationRunId: latestRun.id,
+        projectId: createdImport.projectId,
+        environmentId: createdImport.environmentId,
+        workflowId: metric.workflowId,
+        syntheticTaskSuccessRate: synthetic.taskSuccessRate,
+        actualTaskSuccessRate: toNumber(metric.taskSuccessRate),
+        taskSuccessGapPercent: calculateGapPercent(synthetic.taskSuccessRate, toNumber(metric.taskSuccessRate)),
+        syntheticCompletionTimeMs: synthetic.completionTimeMs,
+        actualCompletionTimeMs: metric.completionTimeMs,
+        completionTimeGapPercent: calculateGapPercent(synthetic.completionTimeMs, metric.completionTimeMs),
+        syntheticErrorRate: synthetic.errorRate,
+        actualErrorRate: toNumber(metric.errorRate),
+        errorRateGapPercent: calculateGapPercent(synthetic.errorRate, toNumber(metric.errorRate)),
+        syntheticApiCallsPerSession: synthetic.apiCallsPerSession,
+        actualApiCallsPerSession: toNumber(metric.apiCallsPerSession),
+        apiCallsGapPercent: calculateGapPercent(synthetic.apiCallsPerSession, toNumber(metric.apiCallsPerSession)),
+        syntheticSupportTicketEstimate: synthetic.supportTicketEstimate,
+        actualSupportTicketCount: metric.supportTicketCount,
+        supportTicketGapPercent: calculateGapPercent(synthetic.supportTicketEstimate, metric.supportTicketCount)
+      });
+    }
+
+    const predictionResult = await predictionAccuracyRepository.replaceForImport(createdImport.id, predictionRows);
+
+    res.status(201).json({
+      import: createdImport,
+      comparisonsCreated: predictionResult.count,
+      note:
+        "Synthetic API calls per session and support-ticket estimate are internal calibration placeholders until external analytics integrations are added."
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Actual metrics import failed";
+    res.status(400).json({ error: message });
+  }
+});
+
+protectedRouter.get("/actual-metrics/comparisons", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = actualMetricsComparisonQuerySchema.safeParse(req.query);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid actual metrics filter" });
+
+  const latestImport = await actualMetricsImportRepository.findLatestForEnvironment({
+    organizationId: user.organizationId,
+    projectId: parsed.data.projectId,
+    environmentId: parsed.data.environmentId
+  });
+
+  if (!latestImport) {
+    return void res.json({
+      import: null,
+      rows: [],
+      note:
+        "Manual CSV import is the first calibration source. External analytics integrations will be added in later phases."
+    });
+  }
+
+  const rows = latestImport.workflowMetrics
+    .filter((metric) => !parsed.data.workflowId || metric.workflowId === parsed.data.workflowId)
+    .map((metric) => {
+      const accuracy = metric.predictionAccuracies[0] ?? null;
+      return {
+        workflow: {
+          id: metric.workflow.id,
+          name: metric.workflow.name
+        },
+        actual: {
+          taskSuccessRate: toNumber(metric.taskSuccessRate),
+          completionTimeMs: metric.completionTimeMs,
+          errorRate: toNumber(metric.errorRate),
+          apiCallsPerSession: toNumber(metric.apiCallsPerSession),
+          supportTicketCount: metric.supportTicketCount
+        },
+        synthetic: accuracy
+          ? {
+              taskSuccessRate: toNumber(accuracy.syntheticTaskSuccessRate),
+              completionTimeMs: accuracy.syntheticCompletionTimeMs,
+              errorRate: toNumber(accuracy.syntheticErrorRate),
+              apiCallsPerSession: toNumber(accuracy.syntheticApiCallsPerSession),
+              supportTicketEstimate: accuracy.syntheticSupportTicketEstimate,
+              simulationRunId: accuracy.simulationRunId
+            }
+          : null,
+        gaps: accuracy
+          ? {
+              taskSuccessRate: toNullableNumber(accuracy.taskSuccessGapPercent),
+              completionTimeMs: toNullableNumber(accuracy.completionTimeGapPercent),
+              errorRate: toNullableNumber(accuracy.errorRateGapPercent),
+              apiCallsPerSession: toNullableNumber(accuracy.apiCallsGapPercent),
+              supportTicketCount: toNullableNumber(accuracy.supportTicketGapPercent)
+            }
+          : null
+      };
+    });
+
+  res.json({
+    import: {
+      id: latestImport.id,
+      sourceLabel: latestImport.sourceLabel,
+      notes: latestImport.notes,
+      rowCount: latestImport.rowCount,
+      createdAt: latestImport.createdAt,
+      periodStart: latestImport.periodStart,
+      periodEnd: latestImport.periodEnd,
+      project: latestImport.project,
+      environment: latestImport.environment,
+      importedByUser: latestImport.importedByUser
+    },
+    rows,
+    note:
+      "This comparison calibrates persona accuracy over time. Synthetic API calls per session and support-ticket estimates remain internal placeholders until third-party analytics integrations ship."
+  });
+});
+
 protectedRouter.post("/demo-runs/20-agent", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -1423,4 +1655,13 @@ function resolveArtifactPath(locator: string): string | null {
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
+}
+
+function toNumber(value: { toString(): string } | number): number {
+  return typeof value === "number" ? value : Number(value.toString());
+}
+
+function toNullableNumber(value: { toString(): string } | number | null): number | null {
+  if (value == null) return null;
+  return toNumber(value);
 }

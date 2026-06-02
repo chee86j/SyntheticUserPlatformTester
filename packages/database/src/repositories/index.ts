@@ -127,6 +127,53 @@ export type EnvironmentUpdateInput = {
   status?: EnvironmentStatus;
 };
 
+export type ActualWorkflowMetricCreateInput = {
+  workflowId: string;
+  taskSuccessRate: number;
+  completionTimeMs: number;
+  errorRate: number;
+  apiCallsPerSession: number;
+  supportTicketCount: number;
+};
+
+export type ActualMetricsImportCreateInput = {
+  organizationId: string;
+  projectId: string;
+  environmentId: string;
+  importedByUserId: string;
+  sourceType?: string;
+  sourceLabel: string;
+  notes?: string;
+  periodStart: Date;
+  periodEnd: Date;
+  metrics: ActualWorkflowMetricCreateInput[];
+};
+
+export type PredictionAccuracyCreateInput = {
+  organizationId: string;
+  actualMetricsImportId: string;
+  actualWorkflowMetricId: string;
+  simulationRunId?: string | null;
+  projectId: string;
+  environmentId: string;
+  workflowId: string;
+  syntheticTaskSuccessRate: number;
+  actualTaskSuccessRate: number;
+  taskSuccessGapPercent?: number | null;
+  syntheticCompletionTimeMs: number;
+  actualCompletionTimeMs: number;
+  completionTimeGapPercent?: number | null;
+  syntheticErrorRate: number;
+  actualErrorRate: number;
+  errorRateGapPercent?: number | null;
+  syntheticApiCallsPerSession: number;
+  actualApiCallsPerSession: number;
+  apiCallsGapPercent?: number | null;
+  syntheticSupportTicketEstimate: number;
+  actualSupportTicketCount: number;
+  supportTicketGapPercent?: number | null;
+};
+
 const prisma = new PrismaClient();
 
 export type AuthenticatedUser = {
@@ -474,6 +521,32 @@ export class RunRepository {
   async listAgentsByRun(runId: string) {
     return prisma.simulationAgent.findMany({ where: { simulationRunId: runId }, orderBy: { createdAt: "asc" } });
   }
+
+  async findLatestCompletedForWorkflow(input: {
+    organizationId: string;
+    projectId: string;
+    environmentId: string;
+    workflowId: string;
+  }) {
+    return prisma.simulationRun.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        workflowId: input.workflowId,
+        status: RunStatus.COMPLETED
+      },
+      include: {
+        environment: true,
+        workflow: true,
+        project: true,
+        budgetPolicy: true,
+        agents: true,
+        findings: true
+      },
+      orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }]
+    });
+  }
 }
 
 export class BudgetPolicyRepository {
@@ -600,6 +673,13 @@ export class WorkflowRepository {
   async deleteForOrganization(id: string, organizationId: string) {
     return prisma.workflow.deleteMany({ where: { id, organizationId } });
   }
+
+  async listByOrganization(organizationId: string) {
+    return prisma.workflow.findMany({
+      where: { organizationId },
+      orderBy: [{ projectId: "asc" }, { createdAt: "asc" }]
+    });
+  }
 }
 
 export class EventRepository {
@@ -667,6 +747,144 @@ export class FindingRepository {
       where: { simulationRunId: runId, simulationRun: { organizationId } },
       orderBy: { createdAt: "desc" }
     });
+  }
+}
+
+export class ActualMetricsImportRepository {
+  async createWithMetrics(input: ActualMetricsImportCreateInput) {
+    return prisma.actualMetricsImport.create({
+      data: {
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        environmentId: input.environmentId,
+        importedByUserId: input.importedByUserId,
+        sourceType: input.sourceType ?? "MANUAL_CSV",
+        sourceLabel: input.sourceLabel,
+        notes: input.notes ?? "",
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+        rowCount: input.metrics.length,
+        workflowMetrics: {
+          create: input.metrics.map((metric) => ({
+            organizationId: input.organizationId,
+            projectId: input.projectId,
+            environmentId: input.environmentId,
+            workflowId: metric.workflowId,
+            taskSuccessRate: new Prisma.Decimal(metric.taskSuccessRate),
+            completionTimeMs: metric.completionTimeMs,
+            errorRate: new Prisma.Decimal(metric.errorRate),
+            apiCallsPerSession: new Prisma.Decimal(metric.apiCallsPerSession),
+            supportTicketCount: metric.supportTicketCount
+          }))
+        }
+      },
+      include: {
+        workflowMetrics: {
+          include: { workflow: true }
+        },
+        project: true,
+        environment: true
+      }
+    });
+  }
+
+  async listByEnvironmentForOrganization(input: {
+    organizationId: string;
+    projectId?: string;
+    environmentId?: string;
+  }) {
+    return prisma.actualMetricsImport.findMany({
+      where: {
+        organizationId: input.organizationId,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        ...(input.environmentId ? { environmentId: input.environmentId } : {})
+      },
+      include: {
+        project: true,
+        environment: true,
+        importedByUser: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  async findLatestForEnvironment(input: {
+    organizationId: string;
+    projectId?: string;
+    environmentId?: string;
+  }) {
+    return prisma.actualMetricsImport.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        ...(input.environmentId ? { environmentId: input.environmentId } : {})
+      },
+      include: {
+        workflowMetrics: {
+          include: {
+            workflow: true,
+            predictionAccuracies: {
+              orderBy: { createdAt: "desc" },
+              include: { simulationRun: true }
+            }
+          },
+          orderBy: { createdAt: "asc" }
+        },
+        project: true,
+        environment: true,
+        importedByUser: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+}
+
+export class PredictionAccuracyRepository {
+  async replaceForImport(actualMetricsImportId: string, rows: PredictionAccuracyCreateInput[]) {
+    await prisma.predictionAccuracy.deleteMany({ where: { actualMetricsImportId } });
+    if (rows.length === 0) return { count: 0 };
+
+    const created = await prisma.$transaction(
+      rows.map((row) =>
+        prisma.predictionAccuracy.create({
+          data: {
+            organizationId: row.organizationId,
+            actualMetricsImportId: row.actualMetricsImportId,
+            actualWorkflowMetricId: row.actualWorkflowMetricId,
+            simulationRunId: row.simulationRunId ?? null,
+            projectId: row.projectId,
+            environmentId: row.environmentId,
+            workflowId: row.workflowId,
+            syntheticTaskSuccessRate: new Prisma.Decimal(row.syntheticTaskSuccessRate),
+            actualTaskSuccessRate: new Prisma.Decimal(row.actualTaskSuccessRate),
+            taskSuccessGapPercent:
+              row.taskSuccessGapPercent == null ? null : new Prisma.Decimal(row.taskSuccessGapPercent),
+            syntheticCompletionTimeMs: row.syntheticCompletionTimeMs,
+            actualCompletionTimeMs: row.actualCompletionTimeMs,
+            completionTimeGapPercent:
+              row.completionTimeGapPercent == null ? null : new Prisma.Decimal(row.completionTimeGapPercent),
+            syntheticErrorRate: new Prisma.Decimal(row.syntheticErrorRate),
+            actualErrorRate: new Prisma.Decimal(row.actualErrorRate),
+            errorRateGapPercent:
+              row.errorRateGapPercent == null ? null : new Prisma.Decimal(row.errorRateGapPercent),
+            syntheticApiCallsPerSession: new Prisma.Decimal(row.syntheticApiCallsPerSession),
+            actualApiCallsPerSession: new Prisma.Decimal(row.actualApiCallsPerSession),
+            apiCallsGapPercent:
+              row.apiCallsGapPercent == null ? null : new Prisma.Decimal(row.apiCallsGapPercent),
+            syntheticSupportTicketEstimate: row.syntheticSupportTicketEstimate,
+            actualSupportTicketCount: row.actualSupportTicketCount,
+            supportTicketGapPercent:
+              row.supportTicketGapPercent == null ? null : new Prisma.Decimal(row.supportTicketGapPercent)
+          }
+        })
+      )
+    );
+
+    return { count: created.length };
   }
 }
 

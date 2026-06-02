@@ -109,6 +109,9 @@ model Organization {
   llmUsages          LlmUsage[]
   llmProviderConfigs LlmProviderConfig[]
   budgetPolicies     BudgetPolicy[]
+  actualMetricsImports ActualMetricsImport[]
+  actualWorkflowMetrics ActualWorkflowMetric[]
+  predictionAccuracies PredictionAccuracy[]
 }
 
 model User {
@@ -122,6 +125,7 @@ model User {
   updatedAt      DateTime        @updatedAt
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   simulationRuns SimulationRun[] @relation("RunCreator")
+  actualMetricsImports ActualMetricsImport[] @relation("ActualMetricsImporter")
 }
 
 model Project {
@@ -134,6 +138,9 @@ model Project {
   environments   Environment[]
   workflows      Workflow[]
   simulationRuns SimulationRun[]
+  actualMetricsImports ActualMetricsImport[]
+  actualWorkflowMetrics ActualWorkflowMetric[]
+  predictionAccuracies PredictionAccuracy[]
 
   @@unique([organizationId, name])
 }
@@ -153,6 +160,9 @@ model Environment {
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testAccounts   TestAccount[]
   simulationRuns SimulationRun[]
+  actualMetricsImports ActualMetricsImport[]
+  actualWorkflowMetrics ActualWorkflowMetric[]
+  predictionAccuracies PredictionAccuracy[]
 
   @@unique([projectId, name])
 }
@@ -199,8 +209,60 @@ model Workflow {
   organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   simulationRuns     SimulationRun[]
+  actualWorkflowMetrics ActualWorkflowMetric[]
+  predictionAccuracies PredictionAccuracy[]
 
   @@unique([projectId, name])
+}
+
+model ActualMetricsImport {
+  id             String               @id @default(uuid())
+  organizationId String
+  projectId      String
+  environmentId  String
+  importedByUserId String
+  sourceType     String               @default("MANUAL_CSV")
+  sourceLabel    String
+  notes          String               @default("")
+  periodStart    DateTime
+  periodEnd      DateTime
+  rowCount       Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment    Environment          @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  importedByUser User                 @relation("ActualMetricsImporter", fields: [importedByUserId], references: [id], onDelete: Cascade)
+  workflowMetrics ActualWorkflowMetric[]
+  predictionAccuracies PredictionAccuracy[]
+
+  @@index([organizationId, createdAt])
+  @@index([projectId, environmentId, createdAt])
+}
+
+model ActualWorkflowMetric {
+  id                    String              @id @default(uuid())
+  organizationId        String
+  actualMetricsImportId String
+  projectId             String
+  environmentId         String
+  workflowId            String
+  taskSuccessRate       Decimal             @db.Decimal(7, 2)
+  completionTimeMs      Int
+  errorRate             Decimal             @db.Decimal(7, 2)
+  apiCallsPerSession    Decimal             @db.Decimal(10, 2)
+  supportTicketCount    Int
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actualMetricsImport   ActualMetricsImport @relation(fields: [actualMetricsImportId], references: [id], onDelete: Cascade)
+  project               Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment           Environment         @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  workflow              Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  predictionAccuracies  PredictionAccuracy[]
+
+  @@unique([actualMetricsImportId, workflowId])
+  @@index([organizationId, projectId, environmentId])
 }
 
 model TestAccount {
@@ -268,6 +330,7 @@ model SimulationRun {
   llmUsages       LlmUsage[]
   artifacts       Artifact[]
   findings        Finding[]
+  predictionAccuracies PredictionAccuracy[]
 }
 
 model SimulationAgent {
@@ -329,6 +392,44 @@ model Finding {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   simulationRun    SimulationRun   @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+}
+
+model PredictionAccuracy {
+  id                    String              @id @default(uuid())
+  organizationId        String
+  actualMetricsImportId String
+  actualWorkflowMetricId String
+  simulationRunId       String?
+  projectId             String
+  environmentId         String
+  workflowId            String
+  syntheticTaskSuccessRate Decimal         @db.Decimal(7, 2)
+  actualTaskSuccessRate Decimal            @db.Decimal(7, 2)
+  taskSuccessGapPercent Decimal?           @db.Decimal(9, 2)
+  syntheticCompletionTimeMs Int
+  actualCompletionTimeMs Int
+  completionTimeGapPercent Decimal?        @db.Decimal(9, 2)
+  syntheticErrorRate    Decimal            @db.Decimal(7, 2)
+  actualErrorRate       Decimal            @db.Decimal(7, 2)
+  errorRateGapPercent   Decimal?           @db.Decimal(9, 2)
+  syntheticApiCallsPerSession Decimal      @db.Decimal(10, 2)
+  actualApiCallsPerSession Decimal         @db.Decimal(10, 2)
+  apiCallsGapPercent    Decimal?           @db.Decimal(9, 2)
+  syntheticSupportTicketEstimate Int
+  actualSupportTicketCount Int
+  supportTicketGapPercent Decimal?         @db.Decimal(9, 2)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actualMetricsImport   ActualMetricsImport @relation(fields: [actualMetricsImportId], references: [id], onDelete: Cascade)
+  actualWorkflowMetric  ActualWorkflowMetric @relation(fields: [actualWorkflowMetricId], references: [id], onDelete: Cascade)
+  simulationRun         SimulationRun?     @relation(fields: [simulationRunId], references: [id], onDelete: SetNull)
+  project               Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment           Environment        @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  workflow              Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([actualWorkflowMetricId, simulationRunId])
+  @@index([organizationId, projectId, environmentId, workflowId])
 }
 
 model LlmProviderConfig {

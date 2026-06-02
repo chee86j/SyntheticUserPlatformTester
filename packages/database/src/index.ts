@@ -5,6 +5,8 @@ export {
   EventRepository,
   ArtifactRepository,
   FindingRepository,
+  ActualMetricsImportRepository,
+  PredictionAccuracyRepository,
   UserRepository,
   ProjectRepository,
   EnvironmentRepository,
@@ -24,7 +26,9 @@ export type {
   EnvironmentUpdateInput,
   ProjectCreateInput,
   ProjectUpdateInput,
-  LlmUsageCreateInput
-  ,
-  FindingCreateInput
+  LlmUsageCreateInput,
+  FindingCreateInput,
+  ActualMetricsImportCreateInput,
+  ActualWorkflowMetricCreateInput,
+  PredictionAccuracyCreateInput
 } from "./repositories/index.js";

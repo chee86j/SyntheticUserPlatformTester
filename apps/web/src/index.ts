@@ -1,6 +1,7 @@
 ﻿import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -108,6 +109,45 @@ type Finding = {
   createdAt: string;
 };
 
+type ActualMetricsImportSummary = {
+  id: string;
+  sourceLabel: string;
+  notes: string;
+  rowCount: number;
+  createdAt: string;
+  periodStart: string;
+  periodEnd: string;
+  project: { id: string; name: string };
+  environment: { id: string; name: string };
+  importedByUser: { id: string; name: string; email: string };
+};
+
+type CalibrationComparisonRow = {
+  workflow: { id: string; name: string };
+  actual: {
+    taskSuccessRate: number;
+    completionTimeMs: number;
+    errorRate: number;
+    apiCallsPerSession: number;
+    supportTicketCount: number;
+  };
+  synthetic: {
+    taskSuccessRate: number;
+    completionTimeMs: number;
+    errorRate: number;
+    apiCallsPerSession: number;
+    supportTicketEstimate: number;
+    simulationRunId: string | null;
+  } | null;
+  gaps: {
+    taskSuccessRate: number | null;
+    completionTimeMs: number | null;
+    errorRate: number | null;
+    apiCallsPerSession: number | null;
+    supportTicketCount: number | null;
+  } | null;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   WEB_PORT: z.coerce.number().int().min(1).max(65535),
@@ -128,6 +168,7 @@ const env = parsedEnv.data;
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use("/static", express.static(path.join(__dirname, "public")));
+app.use("/docs-static", express.static(path.resolve(__dirname, "..", "..", "..", "docs")));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
@@ -414,6 +455,7 @@ function shellNav(user: CurrentUser): string {
         <a href="/dashboard/test-accounts">Test Accounts</a>
         <a href="/dashboard/workflows">Workflows</a>
         <a href="/dashboard/llm-providers">LLM Providers</a>
+        <a href="/dashboard/calibration">Calibration</a>
         <a href="/dashboard/run-setup">Run Setup</a>
         <form method="post" action="/logout" class="inline-form">
           <button type="submit" class="secondary" data-loading-text="Signing out...">Log out</button>
@@ -525,6 +567,173 @@ window.__RUN_EVENTS_CONFIG__ = {
 </script>
 <script type="module" src="/static/run-events.js"></script>`
   );
+}
+
+function renderCalibrationPage(args: {
+  user: CurrentUser;
+  projects: Project[];
+  environments: Environment[];
+  workflows: Workflow[];
+  selectedProjectId?: string;
+  selectedEnvironmentId?: string;
+  selectedWorkflowId?: string;
+  latestImport: ActualMetricsImportSummary | null;
+  comparisonRows: CalibrationComparisonRow[];
+  comparisonNote?: string;
+  flash?: string;
+  error?: string;
+  sampleCsv?: string;
+}): string {
+  const projectOptions = args.projects
+    .map((project) => `<option value="${project.id}" ${project.id === args.selectedProjectId ? "selected" : ""}>${esc(project.name)}</option>`)
+    .join("");
+  const environmentOptions = args.environments
+    .map((environment) => `<option value="${environment.id}" ${environment.id === args.selectedEnvironmentId ? "selected" : ""}>${esc(environment.name)}</option>`)
+    .join("");
+  const workflowOptions = args.workflows
+    .map((workflow) => `<option value="${workflow.id}" ${workflow.id === args.selectedWorkflowId ? "selected" : ""}>${esc(workflow.name)}</option>`)
+    .join("");
+
+  const importSummary = args.latestImport
+    ? `<div class="surface-card">
+        <div class="stack-row">
+          <div>
+            <div class="eyebrow">Latest Actual Import</div>
+            <h2 style="margin:10px 0 6px;">${esc(args.latestImport.sourceLabel)}</h2>
+            <p class="helper">Imported ${esc(new Date(args.latestImport.createdAt).toLocaleString())} by ${esc(args.latestImport.importedByUser.name)} for ${esc(args.latestImport.project.name)} / ${esc(args.latestImport.environment.name)}.</p>
+          </div>
+          <div class="metrics-grid" style="min-width:min(100%, 420px);">
+            <div class="metric-box"><span>Rows</span><strong>${args.latestImport.rowCount}</strong></div>
+            <div class="metric-box"><span>Period Start</span><strong style="font-size:1rem;">${esc(new Date(args.latestImport.periodStart).toLocaleDateString())}</strong></div>
+            <div class="metric-box"><span>Period End</span><strong style="font-size:1rem;">${esc(new Date(args.latestImport.periodEnd).toLocaleDateString())}</strong></div>
+          </div>
+        </div>
+        ${args.latestImport.notes ? `<p class="helper" style="margin-top:12px;">${esc(args.latestImport.notes)}</p>` : ""}
+      </div>`
+    : `<div class="surface-card"><div class="empty-state">No actual metrics have been imported yet. Start with a manual CSV paste to create the first calibration baseline.</div></div>`;
+
+  const rowsHtml = args.comparisonRows
+    .map((row) => {
+      const synthetic = row.synthetic;
+      const gaps = row.gaps;
+      const cell = (
+        syntheticValue: string,
+        actualValue: string,
+        gapValue: number | null
+      ) =>
+        synthetic
+          ? `<div><strong>${syntheticValue}</strong> <span class="muted-link">vs</span> ${actualValue}<br /><span class="helper">Gap ${formatGap(gapValue)}</span></div>`
+          : `<div><strong>Pending</strong><br /><span class="helper">${actualValue} actual only</span></div>`;
+
+      return `<tr>
+        <td><strong>${esc(row.workflow.name)}</strong>${synthetic?.simulationRunId ? `<br /><span class="helper">Run ${esc(synthetic.simulationRunId)}</span>` : ""}</td>
+        <td>${cell(formatPercent(synthetic?.taskSuccessRate), formatPercent(row.actual.taskSuccessRate), gaps?.taskSuccessRate ?? null)}</td>
+        <td>${cell(formatDurationMs(synthetic?.completionTimeMs), formatDurationMs(row.actual.completionTimeMs), gaps?.completionTimeMs ?? null)}</td>
+        <td>${cell(formatPercent(synthetic?.errorRate), formatPercent(row.actual.errorRate), gaps?.errorRate ?? null)}</td>
+        <td>${cell(formatNumber(synthetic?.apiCallsPerSession), formatNumber(row.actual.apiCallsPerSession), gaps?.apiCallsPerSession ?? null)}</td>
+        <td>${cell(formatInteger(synthetic?.supportTicketEstimate), formatInteger(row.actual.supportTicketCount), gaps?.supportTicketCount ?? null)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return renderPage(
+    "Calibration",
+    `${shellNav(args.user)}
+    ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
+    ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
+    <div class="surface-card">
+      <div class="stack-row">
+        <div>
+          <div class="eyebrow">Phase 26 Foundation</div>
+          <h2 style="margin:10px 0 6px;">Synthetic vs Actual Calibration</h2>
+          <p class="helper">Use manual CSV imports to compare synthetic predictions against actual beta or production-adjacent workflow metrics while persona accuracy calibration is still internal.</p>
+        </div>
+        <div class="pill-row">
+          <span class="pill">Manual CSV only</span>
+          <span class="pill">No Segment/Mixpanel/PostHog yet</span>
+          <span class="pill">Gap % visible</span>
+        </div>
+      </div>
+    </div>
+    <div class="surface-card">
+      <h2>Filters</h2>
+      <form method="get" action="/dashboard/calibration" class="grid-3">
+        <label>Project<select name="projectId"><option value="">Select project</option>${projectOptions}</select></label>
+        <label>Environment<select name="environmentId"><option value="">Select environment</option>${environmentOptions}</select></label>
+        <label>Workflow<select name="workflowId"><option value="">All workflows</option>${workflowOptions}</select></label>
+        <div class="page-actions" style="grid-column:1 / -1;">
+          <button type="submit">Refresh comparison</button>
+          <a class="button secondary" href="/dashboard/calibration">Clear filters</a>
+        </div>
+      </form>
+    </div>
+    <div class="surface-card">
+      <h2>Manual CSV Import</h2>
+      <p class="helper">CSV headers: <code>workflow_name,period_start,period_end,task_success_rate,completion_time_ms,error_rate,api_calls_per_session,support_ticket_count</code></p>
+      <form method="post" action="/dashboard/calibration/import">
+        <input type="hidden" name="projectId" value="${esc(args.selectedProjectId ?? "")}" />
+        <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+        <div class="grid-2">
+          <label>Source label<input name="sourceLabel" value="Beta weekly import" required /></label>
+          <label>Notes<input name="notes" value="Calibration baseline for persona accuracy review" /></label>
+        </div>
+        <label style="margin-top:12px;">CSV payload<textarea name="csvText" required>${esc(args.sampleCsv ?? "")}</textarea></label>
+        <div class="page-actions" style="margin-top:14px;">
+          <button type="submit" data-loading-text="Importing metrics...">Import actual metrics</button>
+          <a class="button secondary" href="/dashboard/calibration?projectId=${encodeURIComponent(args.selectedProjectId ?? "")}&environmentId=${encodeURIComponent(args.selectedEnvironmentId ?? "")}&sample=1">Load sample CSV</a>
+          <a class="muted-link" href="/docs-static/prediction-calibration.md" target="_blank" rel="noreferrer">Calibration docs</a>
+        </div>
+      </form>
+    </div>
+    ${importSummary}
+    <div class="surface-card">
+      <h2>Predicted vs Actual Dashboard</h2>
+      <p class="helper">${esc(args.comparisonNote ?? "Use this view to calibrate persona accuracy over time. Synthetic API calls per session and support-ticket estimates are placeholders until telemetry integrations arrive.")}</p>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Workflow</th>
+              <th>Task Success Rate</th>
+              <th>Completion Time</th>
+              <th>Error Rate</th>
+              <th>API Calls / Session</th>
+              <th>Support Tickets</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || '<tr><td colspan="6"><div class="empty-state">No comparison rows yet. Import actual metrics for the selected project and environment first.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`
+  );
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (typeof value !== "number") return "Pending";
+  return `${value.toFixed(2)}%`;
+}
+
+function formatDurationMs(value: number | null | undefined): string {
+  if (typeof value !== "number") return "Pending";
+  return `${Math.round(value / 1000)}s`;
+}
+
+function formatNumber(value: number | null | undefined): string {
+  if (typeof value !== "number") return "Pending";
+  return value.toFixed(2);
+}
+
+function formatInteger(value: number | null | undefined): string {
+  if (typeof value !== "number") return "Pending";
+  return String(Math.round(value));
+}
+
+function formatGap(value: number | null): string {
+  if (value == null) return "n/a";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(2)}%`;
 }
 
 app.get("/", async (_req, res) => res.redirect("/dashboard/projects"));
@@ -1440,6 +1649,105 @@ app.post("/dashboard/demo-runs/20-agent", async (req, res) => {
   }
 
   res.redirect(`/dashboard/runs/${response.data.run.id}?flash=20-agent+demo+run+started`);
+});
+
+app.get("/dashboard/calibration", async (req, res) => {
+  const user = await fetchCurrentUser(req.headers.cookie);
+  if (!ensureAuth(user, res)) return;
+
+  const projectsResponse = await apiRequest<{ projects: Project[] }>(req.headers.cookie, "/api/projects");
+  const projects = projectsResponse?.projects ?? [];
+  const selectedProjectId = typeof req.query.projectId === "string" ? req.query.projectId : projects[0]?.id;
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
+  const environments = selectedProject?.environments ?? [];
+  const selectedEnvironmentId =
+    typeof req.query.environmentId === "string" ? req.query.environmentId : environments[0]?.id;
+  const selectedEnvironment = environments.find((environment) => environment.id === selectedEnvironmentId) ?? environments[0];
+  const workflowsResponse =
+    selectedProject?.id
+      ? await apiRequest<{ workflows: Workflow[] }>(
+          req.headers.cookie,
+          `/api/projects/${selectedProject.id}/workflows`
+        )
+      : null;
+  const workflows = workflowsResponse?.workflows ?? [];
+  const selectedWorkflowId = typeof req.query.workflowId === "string" ? req.query.workflowId : undefined;
+
+  const comparisonParams = new URLSearchParams();
+  if (selectedProject?.id) comparisonParams.set("projectId", selectedProject.id);
+  if (selectedEnvironment?.id) comparisonParams.set("environmentId", selectedEnvironment.id);
+  if (selectedWorkflowId) comparisonParams.set("workflowId", selectedWorkflowId);
+
+  const comparisonsResponse =
+    selectedProject?.id && selectedEnvironment?.id
+      ? await apiRequest<{
+          import: ActualMetricsImportSummary | null;
+          rows: CalibrationComparisonRow[];
+          note?: string;
+        }>(req.headers.cookie, `/api/actual-metrics/comparisons?${comparisonParams.toString()}`)
+      : null;
+
+  let sampleCsv = "";
+  if (req.query.sample === "1") {
+    try {
+      sampleCsv = await readFile(path.resolve(__dirname, "..", "..", "..", "docs", "sample-actual-workflow-metrics.csv"), "utf8");
+    } catch {
+      sampleCsv = "";
+    }
+  }
+
+  const flash = typeof req.query.flash === "string" ? req.query.flash : undefined;
+  const error = typeof req.query.error === "string" ? req.query.error : undefined;
+  res.status(200).type("html").send(
+    renderCalibrationPage({
+      user,
+      projects,
+      environments,
+      workflows,
+      selectedProjectId: selectedProject?.id,
+      selectedEnvironmentId: selectedEnvironment?.id,
+      selectedWorkflowId,
+      latestImport: comparisonsResponse?.import ?? null,
+      comparisonRows: comparisonsResponse?.rows ?? [],
+      comparisonNote: comparisonsResponse?.note,
+      flash,
+      error,
+      sampleCsv
+    })
+  );
+});
+
+app.post("/dashboard/calibration/import", async (req, res) => {
+  const payload = {
+    projectId: String(req.body.projectId ?? ""),
+    environmentId: String(req.body.environmentId ?? ""),
+    sourceLabel: String(req.body.sourceLabel ?? ""),
+    notes: String(req.body.notes ?? ""),
+    csvText: String(req.body.csvText ?? "")
+  };
+
+  if (!payload.projectId || !payload.environmentId) {
+    return void res.redirect("/dashboard/calibration?error=Select+a+project+and+environment+before+importing");
+  }
+
+  const response = await apiRequestDetailed<{ import?: { id: string } }>(req.headers.cookie, "/api/actual-metrics/import-csv", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const query = new URLSearchParams({
+    projectId: payload.projectId,
+    environmentId: payload.environmentId
+  });
+
+  if (!response.ok) {
+    query.set("error", response.error);
+    return void res.redirect(`/dashboard/calibration?${query.toString()}`);
+  }
+
+  query.set("flash", "Actual metrics imported");
+  res.redirect(`/dashboard/calibration?${query.toString()}`);
 });
 
 app.get("/dashboard/runs/:runId", async (req, res) => {

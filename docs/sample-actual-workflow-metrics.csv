@@ -1,0 +1,2 @@
+workflow_name,period_start,period_end,task_success_rate,completion_time_ms,error_rate,api_calls_per_session,support_ticket_count
+"Sign In and Dashboard",2026-06-01T00:00:00.000Z,2026-06-01T23:59:59.000Z,94.50,178000,5.50,5.80,2
