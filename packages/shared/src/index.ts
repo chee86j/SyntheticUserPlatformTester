@@ -27,6 +27,15 @@ export {
   simulationEventTypeSchema,
   simulationEventSeveritySchema
 } from "./event.js";
+export {
+  isAllowedUrl,
+  normalizeAllowedDomains,
+  redactEventPayload,
+  redactSensitiveRecord,
+  redactSensitiveText,
+  redactSensitiveValue,
+  trimText
+} from "./security.js";
 
 export type { PersonaInput, PersonaCreateInput, PersonaUpdateInput } from "./persona.js";
 export type {

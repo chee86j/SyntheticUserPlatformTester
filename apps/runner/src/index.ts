@@ -11,6 +11,7 @@ import {
 } from "@synthetic/database";
 import { env } from "./lib/config.js";
 import { RunnerApiClient } from "./lib/api-client.js";
+import { toStoredArtifactLocator } from "./lib/artifact-storage.js";
 import { getRunDirectory } from "./lib/paths.js";
 import { buildScript } from "./lib/script-builder.js";
 import { executeScriptedWorkflow } from "./lib/playwright-runner.js";
@@ -113,6 +114,8 @@ async function main(): Promise<void> {
     const budgetPolicy = run.budgetPolicyId
       ? await budgetPolicyRepository.findByIdForOrganization(run.budgetPolicyId, run.organizationId)
       : null;
+    const allowedDomains = run.environment.allowedDomains ?? [];
+    const timeoutMs = resolveAgentTimeoutMs(run.maxRunDurationSeconds, budgetPolicy?.maxDurationPerRunSeconds ?? null);
 
     let actionCount = 0;
     const emitWithCount: typeof emit = async (input) => {
@@ -131,6 +134,9 @@ async function main(): Promise<void> {
         agentId: agent.id,
         runDir,
         startUrl,
+        baseUrl: run.environment.baseUrl,
+        allowedDomains,
+        timeoutMs,
         workflow: {
           goal: run.workflow.goal,
           startingPath: run.workflow.startingPath,
@@ -177,7 +183,7 @@ async function main(): Promise<void> {
             simulationRunId: run.id,
             simulationAgentId: agent.id,
             type: artifact.type,
-            uri: artifact.uri
+            uri: toStoredArtifactLocator(artifact.uri)
           });
         },
         maxActionsPerAgent: budgetPolicy?.maxActionsPerAgent
@@ -199,13 +205,17 @@ async function main(): Promise<void> {
       await executeScriptedWorkflow({
         actions,
         runDir,
+        baseUrl: run.environment.baseUrl,
+        allowedDomains,
+        maxActions: budgetPolicy?.maxActionsPerAgent ?? null,
+        timeoutMs,
         emit: (payload) => emitWithCount({ ...payload, severity: payload.severity as EventSeverity | undefined }),
         onArtifact: async (artifact) => {
           await artifactRepository.create({
             simulationRunId: run.id,
             simulationAgentId: agent.id,
             type: artifact.type,
-            uri: artifact.uri
+            uri: toStoredArtifactLocator(artifact.uri)
           });
         }
       });
@@ -244,6 +254,13 @@ async function main(): Promise<void> {
 
     await disconnectDatabaseClient();
   }
+}
+
+function resolveAgentTimeoutMs(runTimeoutSeconds: number, budgetTimeoutSeconds: number | null): number {
+  const candidates = [runTimeoutSeconds, budgetTimeoutSeconds].filter(
+    (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+  );
+  return Math.min(...candidates) * 1000;
 }
 
 async function resolveProviderConfigId(organizationId: string): Promise<string | null> {

@@ -4,16 +4,30 @@ import { fileURLToPath } from "node:url";
 import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { LlmProviderConfigRepository } from "@synthetic/database";
 import { createLlmProvider } from "@synthetic/llm-gateway";
-import { personaCreateSchema, personaUpdateSchema, runSetupSchema, simulationEventSchema, testAccountSchema, testAccountUpdateSchema, workflowCreateSchema, workflowUpdateSchema } from "@synthetic/shared";
+import {
+  normalizeAllowedDomains,
+  personaCreateSchema,
+  personaUpdateSchema,
+  redactEventPayload,
+  redactSensitiveText,
+  runSetupSchema,
+  simulationEventSchema,
+  testAccountSchema,
+  testAccountUpdateSchema,
+  workflowCreateSchema,
+  workflowUpdateSchema
+} from "@synthetic/shared";
 import type { EnvironmentStatus, EnvironmentType, WorkflowStatus } from "@prisma/client";
 import { RunStatus } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/require-auth.js";
+import { requireRole } from "../middleware/require-role.js";
 import { decryptSecret, encryptSecret } from "../auth/secret-encryption.js";
 import { emitRunEvent } from "../realtime/socket.js";
 import { cancelRunJobs, enqueueAgentJob, enqueueSimulationRun } from "../queues/queues.js";
 import { LlmGatewayService } from "../services/llm-gateway-service.js";
+import { RunCreateRateLimiter } from "../services/run-create-rate-limiter.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -28,6 +42,7 @@ const llmProviderConfigRepository = new LlmProviderConfigRepository();
 const llmGatewayService = new LlmGatewayService();
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 const artifactRoots = [path.join(repoRoot, "runs"), path.join(repoRoot, "apps", "runner", "runs")];
+const runCreateRateLimiter = new RunCreateRateLimiter(5, 60_000);
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -91,22 +106,6 @@ const llmCompleteSchema = z.object({
   responseFormat: z.enum(["text", "json"]).default("text")
 });
 
-function normalizeAllowedDomains(rawDomains: string[]): string[] {
-  const normalized = rawDomains
-    .map((domain) => domain.trim().toLowerCase())
-    .filter((domain) => domain.length > 0)
-    .map((domain) => {
-      try {
-        const asUrl = new URL(domain.startsWith("http") ? domain : `https://${domain}`);
-        return asUrl.hostname;
-      } catch {
-        return domain;
-      }
-    });
-
-  return Array.from(new Set(normalized));
-}
-
 async function ensureProjectInOrg(projectId: string, organizationId: string) {
   return projectRepository.findByIdForOrganization(projectId, organizationId);
 }
@@ -131,7 +130,7 @@ protectedRouter.get("/personas/:personaId", async (req: AuthenticatedRequest, re
   res.json({ persona });
 });
 
-protectedRouter.post("/personas", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/personas", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
   const parsed = personaCreateSchema.safeParse(req.body);
@@ -145,7 +144,7 @@ protectedRouter.post("/personas", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-protectedRouter.patch("/personas/:personaId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.patch("/personas/:personaId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -171,7 +170,7 @@ protectedRouter.patch("/personas/:personaId", async (req: AuthenticatedRequest, 
   }
 });
 
-protectedRouter.delete("/personas/:personaId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.delete("/personas/:personaId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
   const params = personaIdParamsSchema.safeParse(req.params);
@@ -218,7 +217,7 @@ protectedRouter.get("/projects/:projectId", async (req: AuthenticatedRequest, re
   res.json({ project });
 });
 
-protectedRouter.post("/projects", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/projects", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -243,7 +242,7 @@ protectedRouter.post("/projects", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-protectedRouter.patch("/projects/:projectId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.patch("/projects/:projectId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -281,7 +280,7 @@ protectedRouter.patch("/projects/:projectId", async (req: AuthenticatedRequest, 
   }
 });
 
-protectedRouter.delete("/projects/:projectId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.delete("/projects/:projectId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -334,7 +333,7 @@ protectedRouter.get("/projects/:projectId/environments", async (req: Authenticat
   res.json({ environments });
 });
 
-protectedRouter.post("/projects/:projectId/environments", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/projects/:projectId/environments", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -376,6 +375,7 @@ protectedRouter.post("/projects/:projectId/environments", async (req: Authentica
 
 protectedRouter.patch(
   "/projects/:projectId/environments/:environmentId",
+  requireRole("OWNER", "ADMIN"),
   async (req: AuthenticatedRequest, res) => {
     const user = req.user;
     if (!user) {
@@ -432,6 +432,7 @@ protectedRouter.patch(
 
 protectedRouter.delete(
   "/projects/:projectId/environments/:environmentId",
+  requireRole("OWNER", "ADMIN"),
   async (req: AuthenticatedRequest, res) => {
     const user = req.user;
     if (!user) {
@@ -463,6 +464,7 @@ protectedRouter.delete(
 
 protectedRouter.post(
   "/projects/:projectId/environments/:environmentId/test-connection",
+  requireRole("OWNER", "ADMIN", "TESTER"),
   async (req: AuthenticatedRequest, res) => {
     const user = req.user;
     if (!user) {
@@ -569,7 +571,7 @@ protectedRouter.get("/environments/:environmentId/test-accounts", async (req: Au
   });
 });
 
-protectedRouter.post("/environments/:environmentId/test-accounts", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/environments/:environmentId/test-accounts", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -599,7 +601,7 @@ protectedRouter.post("/environments/:environmentId/test-accounts", async (req: A
   }
 });
 
-protectedRouter.post("/environments/:environmentId/test-accounts/import", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/environments/:environmentId/test-accounts/import", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -651,7 +653,7 @@ protectedRouter.post("/environments/:environmentId/test-accounts/import", async 
   }
 });
 
-protectedRouter.patch("/environments/:environmentId/test-accounts/:accountId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.patch("/environments/:environmentId/test-accounts/:accountId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -668,7 +670,7 @@ protectedRouter.patch("/environments/:environmentId/test-accounts/:accountId", a
   res.json({ success: true });
 });
 
-protectedRouter.delete("/environments/:environmentId/test-accounts/:accountId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.delete("/environments/:environmentId/test-accounts/:accountId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -680,7 +682,7 @@ protectedRouter.delete("/environments/:environmentId/test-accounts/:accountId", 
   res.json({ success: true });
 });
 
-protectedRouter.post("/test-accounts/:accountId/reserve", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/test-accounts/:accountId/reserve", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -704,7 +706,7 @@ protectedRouter.post("/test-accounts/:accountId/reserve", async (req: Authentica
   res.json({ success: true });
 });
 
-protectedRouter.post("/test-accounts/:accountId/release", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/test-accounts/:accountId/release", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -750,7 +752,7 @@ protectedRouter.get("/projects/:projectId/workflows", async (req: AuthenticatedR
   res.json({ workflows });
 });
 
-protectedRouter.post("/projects/:projectId/workflows", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/projects/:projectId/workflows", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -773,6 +775,7 @@ protectedRouter.post("/projects/:projectId/workflows", async (req: Authenticated
 
 protectedRouter.patch(
   "/projects/:projectId/workflows/:workflowId",
+  requireRole("OWNER", "ADMIN"),
   async (req: AuthenticatedRequest, res) => {
     const user = req.user;
     if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -808,6 +811,7 @@ protectedRouter.patch(
 
 protectedRouter.delete(
   "/projects/:projectId/workflows/:workflowId",
+  requireRole("OWNER", "ADMIN"),
   async (req: AuthenticatedRequest, res) => {
     const user = req.user;
     if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -837,7 +841,7 @@ protectedRouter.get("/run-setup/options", async (req: AuthenticatedRequest, res)
   res.json({ projects, personas, budgetPolicies });
 });
 
-protectedRouter.get("/llm/providers", async (req: AuthenticatedRequest, res) => {
+protectedRouter.get("/llm/providers", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -851,7 +855,7 @@ protectedRouter.get("/llm/providers", async (req: AuthenticatedRequest, res) => 
   });
 });
 
-protectedRouter.post("/llm/providers", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/llm/providers", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -878,7 +882,7 @@ protectedRouter.post("/llm/providers", async (req: AuthenticatedRequest, res) =>
   });
 });
 
-protectedRouter.patch("/llm/providers/:configId", async (req: AuthenticatedRequest, res) => {
+protectedRouter.patch("/llm/providers/:configId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -914,7 +918,7 @@ protectedRouter.patch("/llm/providers/:configId", async (req: AuthenticatedReque
   });
 });
 
-protectedRouter.post("/llm/providers/:configId/test", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/llm/providers/:configId/test", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -956,7 +960,7 @@ protectedRouter.post("/llm/providers/:configId/test", async (req: AuthenticatedR
       }
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown provider error";
+    const message = redactSensitiveText(error instanceof Error ? error.message : "Unknown provider error");
     await llmProviderConfigRepository.updateForOrganization(config.id, user.organizationId, {
       status: "error",
       lastCheckedAt: new Date(),
@@ -966,7 +970,7 @@ protectedRouter.post("/llm/providers/:configId/test", async (req: AuthenticatedR
   }
 });
 
-protectedRouter.post("/llm/complete", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/llm/complete", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -1016,7 +1020,7 @@ protectedRouter.post("/llm/complete", async (req: AuthenticatedRequest, res) => 
   }
 });
 
-protectedRouter.post("/demo-runs/20-agent", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/demo-runs/20-agent", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -1117,9 +1121,15 @@ protectedRouter.post("/demo-runs/20-agent", async (req: AuthenticatedRequest, re
   res.status(201).json({ run, agentsCreated: agentRecords.length });
 });
 
-protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/simulation-runs", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const rateLimit = runCreateRateLimiter.check(`${user.organizationId}:${user.id}`);
+  if (!rateLimit.allowed) {
+    res.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+    return void res.status(429).json({ error: "Run creation rate limit exceeded" });
+  }
 
   const parsed = runSetupSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -1217,7 +1227,7 @@ protectedRouter.post("/simulation-runs", async (req: AuthenticatedRequest, res) 
   res.status(201).json({ run });
 });
 
-protectedRouter.post("/simulation-runs/:runId/cancel", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/simulation-runs/:runId/cancel", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -1234,7 +1244,7 @@ protectedRouter.post("/simulation-runs/:runId/cancel", async (req: Authenticated
   res.json({ success: true });
 });
 
-protectedRouter.post("/events", async (req: AuthenticatedRequest, res) => {
+protectedRouter.post("/events", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
 
@@ -1265,7 +1275,7 @@ protectedRouter.post("/events", async (req: AuthenticatedRequest, res) => {
     personaId: parsed.data.personaId,
     eventType: parsed.data.eventType,
     severity: parsed.data.severity,
-    payload: parsed.data.payload,
+    payload: redactEventPayload(parsed.data.payload),
     timestamp: parsed.data.timestamp
   });
 
@@ -1286,7 +1296,12 @@ protectedRouter.get("/runs/:runId/events", async (req: AuthenticatedRequest, res
   }
 
   const events = await eventRepository.listByRunForOrganization(params.data.runId, user.organizationId);
-  res.json({ events });
+  res.json({
+    events: events.map((event) => ({
+      ...event,
+      payload: redactEventPayload(asRecord(event.payload))
+    }))
+  });
 });
 
 protectedRouter.get("/runs/:runId/budget-summary", async (req: AuthenticatedRequest, res) => {
@@ -1337,14 +1352,15 @@ protectedRouter.get("/runs/:runId/artifacts/:artifactId/content", async (req: Au
   if (!artifact) return void res.status(404).json({ error: "Artifact not found" });
 
   if (/^https?:\/\//i.test(artifact.uri)) {
-    return void res.redirect(artifact.uri);
+    return void res.status(400).json({ error: "Remote artifact locators are not supported" });
   }
 
-  const resolvedPath = path.resolve(artifact.uri);
-  const isAllowedPath = artifactRoots.some(
-    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}${path.sep}`)
-  );
-  if (!isAllowedPath) {
+  if (!artifact.uri || path.isAbsolute(artifact.uri)) {
+    return void res.status(400).json({ error: "Invalid artifact locator" });
+  }
+
+  const resolvedPath = resolveArtifactPath(artifact.uri);
+  if (!resolvedPath) {
     return void res.status(403).json({ error: "Artifact path is not allowed" });
   }
 
@@ -1360,3 +1376,20 @@ protectedRouter.get("/runs/:runId/artifacts/:artifactId/content", async (req: Au
 
   res.sendFile(resolvedPath);
 });
+
+function resolveArtifactPath(locator: string): string | null {
+  for (const root of artifactRoots) {
+    const resolvedRoot = path.resolve(root);
+    const candidate = path.resolve(resolvedRoot, locator);
+    if (candidate === resolvedRoot || candidate.startsWith(`${resolvedRoot}${path.sep}`)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}

@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   ArtifactRepository,
   BudgetPolicyRepository,
@@ -11,8 +11,9 @@ import {
 } from '@synthetic/database';
 import { ArtifactType } from '@prisma/client';
 import { generateRunReportMarkdown } from '@synthetic/reports';
-import { getRunDirectory } from '../lib/paths.js';
-import { EventEmitterService } from './event-emitter-service.js';
+import { toStoredArtifactLocator } from "../lib/artifact-storage.js";
+import { getRunDirectory } from "../lib/paths.js";
+import { EventEmitterService } from "./event-emitter-service.js";
 
 export class RunReportService {
   private readonly eventRepository = new EventRepository();
@@ -53,7 +54,7 @@ export class RunReportService {
     await mkdir(reportDirectory, { recursive: true });
 
     const budgetTotals = await this.llmUsageRepository.getRunUsageTotals(run.id, run.organizationId);
-    const reportPath = path.join(reportDirectory, 'report.md');
+    const reportPath = path.join(reportDirectory, "report.md");
     const markdown = generateRunReportMarkdown({
       generatedAt: new Date(),
       run: {
@@ -126,20 +127,21 @@ export class RunReportService {
       }
     });
 
-    await writeFile(reportPath, markdown, 'utf8');
+    await writeFile(reportPath, markdown, "utf8");
+    const reportLocator = toStoredArtifactLocator(reportPath);
 
     const artifact = await this.artifactRepository.create({
       simulationRunId: run.id,
       simulationAgentId: agents[0].id,
       type: ArtifactType.REPORT,
-      uri: reportPath
+      uri: reportLocator
     });
 
     await this.eventEmitter.emit({
       runId: run.id,
       agentId: agents[0].id,
-      eventType: 'artifact.created',
-      payload: { artifactId: artifact.id, type: 'REPORT', uri: reportPath }
+      eventType: "artifact.created",
+      payload: { artifactId: artifact.id, type: "REPORT", uri: reportLocator }
     });
 
     return { reportPath, artifactId: artifact.id };

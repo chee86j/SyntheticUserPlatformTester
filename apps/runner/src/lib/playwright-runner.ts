@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isAllowedUrl } from "@synthetic/shared";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "./config.js";
 import type { ScriptedAction } from "./actions.js";
@@ -28,6 +29,10 @@ type ArtifactFn = (input: { type: "SCREENSHOT" | "TRACE" | "VIDEO" | "CONSOLE_LO
 export async function executeScriptedWorkflow(input: {
   actions: ScriptedAction[];
   runDir: string;
+  baseUrl: string;
+  allowedDomains: string[];
+  maxActions?: number | null;
+  timeoutMs?: number | null;
   emit: EmitFn;
   onArtifact: ArtifactFn;
 }): Promise<void> {
@@ -46,6 +51,7 @@ export async function executeScriptedWorkflow(input: {
         : undefined
     );
 
+    await applyNetworkRestrictions(context, input.allowedDomains, input.baseUrl);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
     const page = await context.newPage();
@@ -71,45 +77,51 @@ export async function executeScriptedWorkflow(input: {
       }
     });
 
-    for (let index = 0; index < input.actions.length; index += 1) {
-      const action = input.actions[index];
-      const startedAt = Date.now();
-      await input.emit({ eventType: "action.started", payload: { action: action.type, index } });
+    const maxActions = input.maxActions == null ? input.actions.length : Math.min(input.actions.length, input.maxActions);
+    await withTimeout(
+      (async () => {
+        for (let index = 0; index < maxActions; index += 1) {
+          const action = input.actions[index];
+          const startedAt = Date.now();
+          await input.emit({ eventType: "action.started", payload: { action: action.type, index } });
 
-      try {
-        const metadata = await runAction(page, action, input.runDir, index);
-        const durationMs = Date.now() - startedAt;
+          try {
+            const metadata = await runAction(page, action, input.runDir, index);
+            const durationMs = Date.now() - startedAt;
 
-        await input.emit({
-          eventType: "action.completed",
-          payload: { action: action.type, index, durationMs, ...(metadata.pageLoadMs ? { pageLoadMs: metadata.pageLoadMs } : {}) }
-        });
+            await input.emit({
+              eventType: "action.completed",
+              payload: { action: action.type, index, durationMs, ...(metadata.pageLoadMs ? { pageLoadMs: metadata.pageLoadMs } : {}) }
+            });
 
-        if (metadata.screenshotPath) {
-          await input.emit({ eventType: "screenshot.captured", payload: { uri: metadata.screenshotPath } });
-          await input.emit({ eventType: "artifact.created", payload: { type: "SCREENSHOT", uri: metadata.screenshotPath } });
-          await input.onArtifact({ type: "SCREENSHOT", uri: metadata.screenshotPath });
-        }
-      } catch (error) {
-        const failureShot = path.join(input.runDir, `failed-step-${index + 1}.png`);
-        await page.screenshot({ path: failureShot, fullPage: true });
-        await input.emit({ eventType: "screenshot.captured", severity: "WARNING", payload: { uri: failureShot } });
-        await input.emit({ eventType: "artifact.created", severity: "WARNING", payload: { type: "SCREENSHOT", uri: failureShot } });
-        await input.onArtifact({ type: "SCREENSHOT", uri: failureShot });
+            if (metadata.screenshotPath) {
+              await input.emit({ eventType: "screenshot.captured", payload: { uri: metadata.screenshotPath } });
+              await input.emit({ eventType: "artifact.created", payload: { type: "SCREENSHOT", uri: metadata.screenshotPath } });
+              await input.onArtifact({ type: "SCREENSHOT", uri: metadata.screenshotPath });
+            }
+          } catch (error) {
+            const failureShot = path.join(input.runDir, `failed-step-${index + 1}.png`);
+            await page.screenshot({ path: failureShot, fullPage: true });
+            await input.emit({ eventType: "screenshot.captured", severity: "WARNING", payload: { uri: failureShot } });
+            await input.emit({ eventType: "artifact.created", severity: "WARNING", payload: { type: "SCREENSHOT", uri: failureShot } });
+            await input.onArtifact({ type: "SCREENSHOT", uri: failureShot });
 
-        await input.emit({
-          eventType: "action.failed",
-          severity: "ERROR",
-          payload: {
-            action: action.type,
-            index,
-            error: error instanceof Error ? error.message : "Unknown action error"
+            await input.emit({
+              eventType: "action.failed",
+              severity: "ERROR",
+              payload: {
+                action: action.type,
+                index,
+                error: error instanceof Error ? error.message : "Unknown action error"
+              }
+            });
+            const message = error instanceof Error ? error.message : "Unknown action error";
+            throw new ProductWorkflowError(message);
           }
-        });
-        const message = error instanceof Error ? error.message : "Unknown action error";
-        throw new ProductWorkflowError(message);
-      }
-    }
+        }
+      })(),
+      input.timeoutMs ?? null
+    );
 
     const tracePath = path.join(input.runDir, "trace.zip");
     await context.tracing.stop({ path: tracePath });
@@ -135,6 +147,34 @@ export async function executeScriptedWorkflow(input: {
       }
     }
     await browser.close();
+  }
+}
+
+async function applyNetworkRestrictions(context: BrowserContext, allowedDomains: string[], baseUrl: string): Promise<void> {
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (isAllowedUrl({ url, allowedDomains, baseUrl })) {
+      await route.continue();
+      return;
+    }
+
+    await route.abort("blockedbyclient");
+  });
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | null): Promise<T> {
+  if (timeoutMs == null || timeoutMs <= 0) return promise;
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new ProductWorkflowError(`Agent exceeded timeout of ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 

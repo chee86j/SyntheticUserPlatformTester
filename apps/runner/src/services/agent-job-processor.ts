@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { ArtifactRepository, RunRepository, TestAccountRepository } from "@synthetic/database";
 import { RunStatus, type EventSeverity } from "@prisma/client";
 import { buildScript } from "../lib/script-builder.js";
+import { toStoredArtifactLocator } from "../lib/artifact-storage.js";
 import { executeScriptedWorkflow, ProductWorkflowError } from "../lib/playwright-runner.js";
 import { getRunDirectory } from "../lib/paths.js";
 import { decryptSecret } from "../lib/secrets.js";
@@ -52,6 +53,8 @@ export class AgentJobProcessor {
 
     const runDir = getRunDirectory(run.id, agent.id);
     await mkdir(runDir, { recursive: true });
+    const allowedDomains = run.environment.allowedDomains ?? [];
+    const timeoutMs = resolveAgentTimeoutMs(run.maxRunDurationSeconds, run.budgetPolicy?.maxDurationPerRunSeconds ?? null);
 
     try {
       await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "agent.started", payload: { accountLabel: account.label } });
@@ -66,6 +69,10 @@ export class AgentJobProcessor {
       await executeScriptedWorkflow({
         actions,
         runDir,
+        baseUrl: run.environment.baseUrl,
+        allowedDomains,
+        maxActions: run.budgetPolicy?.maxActionsPerAgent ?? null,
+        timeoutMs,
         emit: (payload) =>
           this.eventEmitter.emit({
             runId: run.id,
@@ -80,7 +87,7 @@ export class AgentJobProcessor {
             simulationRunId: run.id,
             simulationAgentId: agent.id,
             type: artifact.type,
-            uri: artifact.uri
+            uri: toStoredArtifactLocator(artifact.uri)
           });
         }
       });
@@ -155,6 +162,13 @@ export class AgentJobProcessor {
 
     await enqueueReportJob(runId);
   }
+}
+
+function resolveAgentTimeoutMs(runTimeoutSeconds: number, budgetTimeoutSeconds: number | null): number {
+  const candidates = [runTimeoutSeconds, budgetTimeoutSeconds].filter(
+    (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+  );
+  return Math.min(...candidates) * 1000;
 }
 
 function resolveAccountPassword(encryptedPassword: string | null, secretRef: string | null): string {

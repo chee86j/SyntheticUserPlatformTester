@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isAllowedUrl } from "@synthetic/shared";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "../lib/config.js";
 import { AgentMemoryService } from "./agent-memory-service.js";
@@ -61,6 +62,9 @@ export async function executeLlmDrivenWorkflow(input: {
   emit: EmitFn;
   onArtifact: ArtifactFn;
   maxActionsPerAgent?: number | null;
+  allowedDomains: string[];
+  baseUrl: string;
+  timeoutMs?: number | null;
 }): Promise<{ completed: boolean; steps: number }> {
   const memory = new AgentMemoryService();
   const promptBuilder = new AgentPromptBuilder();
@@ -314,6 +318,9 @@ export async function runSingleLlmAgent(input: {
   emit: EmitFn;
   onArtifact: ArtifactFn;
   maxActionsPerAgent?: number | null;
+  allowedDomains: string[];
+  baseUrl: string;
+  timeoutMs?: number | null;
 }): Promise<{ completed: boolean; steps: number }> {
   const browser = await chromium.launch({ headless: env.RUNNER_HEADLESS, slowMo: env.RUNNER_SLOW_MO_MS });
   let context: BrowserContext | null = null;
@@ -328,6 +335,16 @@ export async function runSingleLlmAgent(input: {
           }
         : undefined
     );
+
+    await context.route("**/*", async (route) => {
+      const url = route.request().url();
+      if (isAllowedUrl({ url, allowedDomains: input.allowedDomains, baseUrl: input.baseUrl })) {
+        await route.continue();
+        return;
+      }
+
+      await route.abort("blockedbyclient");
+    });
 
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage();
@@ -351,18 +368,24 @@ export async function runSingleLlmAgent(input: {
 
     await page.goto(input.startUrl, { waitUntil: "domcontentloaded" });
 
-    const result = await executeLlmDrivenWorkflow({
-      page,
-      runId: input.runId,
-      agentId: input.agentId,
-      runDir: input.runDir,
-      workflow: input.workflow,
-      personaTraits: input.personaTraits,
-      llmComplete: input.llmComplete,
-      emit: input.emit,
-      onArtifact: input.onArtifact,
-      maxActionsPerAgent: input.maxActionsPerAgent
-    });
+    const result = await withTimeout(
+      executeLlmDrivenWorkflow({
+        page,
+        runId: input.runId,
+        agentId: input.agentId,
+        runDir: input.runDir,
+        workflow: input.workflow,
+        personaTraits: input.personaTraits,
+        llmComplete: input.llmComplete,
+        emit: input.emit,
+        onArtifact: input.onArtifact,
+        maxActionsPerAgent: input.maxActionsPerAgent,
+        allowedDomains: input.allowedDomains,
+        baseUrl: input.baseUrl,
+        timeoutMs: input.timeoutMs
+      }),
+      input.timeoutMs ?? null
+    );
 
     const tracePath = path.join(input.runDir, "trace.zip");
     await context.tracing.stop({ path: tracePath });
@@ -379,6 +402,22 @@ export async function runSingleLlmAgent(input: {
       }
     }
     await browser.close();
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | null): Promise<T> {
+  if (timeoutMs == null || timeoutMs <= 0) return promise;
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`Agent exceeded timeout of ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
