@@ -262,13 +262,34 @@ CREATE TABLE "BudgetPolicy" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "maxRunCostUsd" DECIMAL(10,2),
-    "maxRunDurationSeconds" INTEGER,
+    "maxCostPerRun" DECIMAL(12,4),
+    "maxTokensPerRun" INTEGER,
+    "maxActionsPerAgent" INTEGER,
+    "maxDurationPerRunSeconds" INTEGER,
+    "maxDailyCost" DECIMAL(12,4),
+    "stopOnBudgetExceeded" BOOLEAN NOT NULL DEFAULT true,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "BudgetPolicy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LlmUsage" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "agentId" TEXT,
+    "provider" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "inputTokens" INTEGER NOT NULL,
+    "outputTokens" INTEGER NOT NULL,
+    "totalTokens" INTEGER NOT NULL,
+    "estimatedCostUsd" DECIMAL(12,6) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LlmUsage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -300,6 +321,12 @@ CREATE INDEX "SimulationEvent_runId_timestamp_idx" ON "SimulationEvent"("runId",
 
 -- CreateIndex
 CREATE UNIQUE INDEX "BudgetPolicy_organizationId_name_key" ON "BudgetPolicy"("organizationId", "name");
+
+-- CreateIndex
+CREATE INDEX "LlmUsage_runId_createdAt_idx" ON "LlmUsage"("runId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "LlmUsage_organizationId_createdAt_idx" ON "LlmUsage"("organizationId", "createdAt");
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -378,4 +405,10 @@ ALTER TABLE "LlmProviderConfig" ADD CONSTRAINT "LlmProviderConfig_organizationId
 
 -- AddForeignKey
 ALTER TABLE "BudgetPolicy" ADD CONSTRAINT "BudgetPolicy_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LlmUsage" ADD CONSTRAINT "LlmUsage_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LlmUsage" ADD CONSTRAINT "LlmUsage_runId_fkey" FOREIGN KEY ("runId") REFERENCES "SimulationRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

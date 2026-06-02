@@ -75,6 +75,18 @@ export type ArtifactCreateInput = {
   uri: string;
 };
 
+export type LlmUsageCreateInput = {
+  organizationId: string;
+  runId: string;
+  agentId?: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+};
+
 export type EnvironmentCreateInput = {
   organizationId: string;
   projectId: string;
@@ -426,6 +438,62 @@ export class BudgetPolicyRepository {
 
   async findByIdForOrganization(id: string, organizationId: string) {
     return prisma.budgetPolicy.findFirst({ where: { id, organizationId, isActive: true } });
+  }
+}
+
+export class LlmUsageRepository {
+  async create(input: LlmUsageCreateInput) {
+    return prisma.llmUsage.create({
+      data: {
+        organizationId: input.organizationId,
+        runId: input.runId,
+        agentId: input.agentId ?? null,
+        provider: input.provider,
+        model: input.model,
+        inputTokens: input.inputTokens,
+        outputTokens: input.outputTokens,
+        totalTokens: input.totalTokens,
+        estimatedCostUsd: new Prisma.Decimal(input.estimatedCostUsd)
+      }
+    });
+  }
+
+  async getRunUsageTotals(runId: string, organizationId: string) {
+    const usage = await prisma.llmUsage.aggregate({
+      where: { runId, organizationId },
+      _sum: {
+        inputTokens: true,
+        outputTokens: true,
+        totalTokens: true,
+        estimatedCostUsd: true
+      }
+    });
+
+    return {
+      inputTokens: usage._sum.inputTokens ?? 0,
+      outputTokens: usage._sum.outputTokens ?? 0,
+      totalTokens: usage._sum.totalTokens ?? 0,
+      estimatedCostUsd: Number(usage._sum.estimatedCostUsd ?? 0)
+    };
+  }
+
+  async getDailyCostTotal(organizationId: string, dayStart: Date, dayEnd: Date) {
+    const usage = await prisma.llmUsage.aggregate({
+      where: { organizationId, createdAt: { gte: dayStart, lt: dayEnd } },
+      _sum: { estimatedCostUsd: true }
+    });
+    return Number(usage._sum.estimatedCostUsd ?? 0);
+  }
+
+  async listByRun(runId: string, organizationId: string) {
+    return prisma.llmUsage.findMany({
+      where: { runId, organizationId },
+      orderBy: { createdAt: "asc" }
+    });
+  }
+
+  async countByRunAndAgent(runId: string, organizationId: string, agentId: string) {
+    return prisma.llmUsage.count({ where: { runId, organizationId, agentId } });
   }
 }
 

@@ -27,8 +27,12 @@ async function main(): Promise<void> {
     data: {
       organizationId: organization.id,
       name: "Default Budget",
-      maxRunCostUsd: "50.00",
-      maxRunDurationSeconds: 900,
+      maxCostPerRun: "50.0000",
+      maxTokensPerRun: 500000,
+      maxActionsPerAgent: 200,
+      maxDurationPerRunSeconds: 900,
+      maxDailyCost: "250.0000",
+      stopOnBudgetExceeded: true,
       isActive: true
     }
   });

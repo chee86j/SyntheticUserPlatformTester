@@ -167,6 +167,7 @@ function useRunEvents(config) {
   const [artifacts, setArtifacts] = React.useState(
     Array.isArray(config.initialArtifacts) ? [...config.initialArtifacts] : []
   );
+  const [budgetSummary, setBudgetSummary] = React.useState(null);
   const seenRef = React.useRef(new Set(events.map((event) => event.id)));
   const artifactSeenRef = React.useRef(new Set(artifacts.map((artifact) => artifact.id)));
 
@@ -249,7 +250,30 @@ function useRunEvents(config) {
     void fetchArtifacts();
   }, [config.apiBaseUrl, config.runId]);
 
-  return { events, artifacts };
+  React.useEffect(() => {
+    let timer = null;
+
+    async function fetchBudgetSummary() {
+      const response = await fetch(`${config.apiBaseUrl}/api/runs/${config.runId}/budget-summary`, {
+        method: "GET",
+        credentials: "include"
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (payload && payload.summary) setBudgetSummary(payload.summary);
+    }
+
+    void fetchBudgetSummary();
+    timer = window.setInterval(() => {
+      void fetchBudgetSummary();
+    }, 5000);
+
+    return () => {
+      if (timer) window.clearInterval(timer);
+    };
+  }, [config.apiBaseUrl, config.runId]);
+
+  return { events, artifacts, budgetSummary };
 }
 
 function MetricCard({ title, value, subtitle }) {
@@ -263,7 +287,7 @@ function MetricCard({ title, value, subtitle }) {
 }
 
 function DashboardApp({ config }) {
-  const { events, artifacts } = useRunEvents(config);
+  const { events, artifacts, budgetSummary } = useRunEvents(config);
   const dashboard = React.useMemo(() => buildDashboard(events), [events]);
   const rc = Recharts;
 
@@ -271,6 +295,16 @@ function DashboardApp({ config }) {
   const avgCompletionLabel = cards.avgCompletionTimeMs === null ? "n/a" : `${Math.round(cards.avgCompletionTimeMs)} ms`;
   const avgFrustrationLabel = cards.avgFrustrationScore === null ? "n/a" : cards.avgFrustrationScore.toFixed(1);
   const llmCostLabel = `$${cards.estimatedLlmCostUsed.toFixed(2)}`;
+  const budgetCostUsed = budgetSummary ? `$${Number(budgetSummary.totals.estimatedCostUsd || 0).toFixed(4)}` : "n/a";
+  const budgetTokensUsed = budgetSummary ? String(budgetSummary.totals.totalTokens || 0) : "n/a";
+  const budgetRemainingCost =
+    budgetSummary && budgetSummary.remaining && budgetSummary.remaining.cost !== null
+      ? `$${Number(budgetSummary.remaining.cost).toFixed(4)}`
+      : "unbounded";
+  const projectedCost =
+    budgetSummary && budgetSummary.projected && budgetSummary.projected.next1000TokensCost !== null
+      ? `$${Number(budgetSummary.projected.next1000TokensCost).toFixed(4)} / 1k tokens`
+      : "n/a";
 
   return React.createElement(
     "div",
@@ -285,7 +319,11 @@ function DashboardApp({ config }) {
       React.createElement(MetricCard, { title: "Errors Found", value: String(cards.errorsFound), subtitle: "severity + failed events" }),
       React.createElement(MetricCard, { title: "Average Completion Time", value: avgCompletionLabel, subtitle: "from durationMs / action spans" }),
       React.createElement(MetricCard, { title: "Average Frustration Score", value: avgFrustrationLabel, subtitle: "from payload.frustrationScore" }),
-      React.createElement(MetricCard, { title: "Estimated LLM Cost Used", value: llmCostLabel, subtitle: "from payload.llmCostUsd" })
+      React.createElement(MetricCard, { title: "Estimated LLM Cost Used", value: llmCostLabel, subtitle: "from payload.llmCostUsd" }),
+      React.createElement(MetricCard, { title: "Budget Cost Used", value: budgetCostUsed, subtitle: "from tracked llm usage" }),
+      React.createElement(MetricCard, { title: "Budget Tokens Used", value: budgetTokensUsed, subtitle: "input + output tokens" }),
+      React.createElement(MetricCard, { title: "Remaining Budget", value: budgetRemainingCost, subtitle: "remaining run cost cap" }),
+      React.createElement(MetricCard, { title: "Projected Cost", value: projectedCost, subtitle: "estimated next 1k tokens" })
     ),
     React.createElement(
       "div",

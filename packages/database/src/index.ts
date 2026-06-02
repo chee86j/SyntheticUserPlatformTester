@@ -9,6 +9,7 @@ export {
   EnvironmentRepository,
   TestAccountRepository,
   BudgetPolicyRepository,
+  LlmUsageRepository,
   LlmProviderConfigRepository,
   disconnectDatabaseClient
 } from "./repositories/index.js";
@@ -21,5 +22,6 @@ export type {
   EnvironmentCreateInput,
   EnvironmentUpdateInput,
   ProjectCreateInput,
-  ProjectUpdateInput
+  ProjectUpdateInput,
+  LlmUsageCreateInput
 } from "./repositories/index.js";

@@ -95,6 +95,7 @@ model Organization {
   testAccounts       TestAccount[]
   simulationRuns     SimulationRun[]
   simulationEvents   SimulationEvent[]
+  llmUsages          LlmUsage[]
   llmProviderConfigs LlmProviderConfig[]
   budgetPolicies     BudgetPolicy[]
 }
@@ -253,6 +254,7 @@ model SimulationRun {
   createdByUser   User              @relation("RunCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
   agents          SimulationAgent[]
   events          SimulationEvent[]
+  llmUsages       LlmUsage[]
   artifacts       Artifact[]
   findings        Finding[]
 }
@@ -332,8 +334,12 @@ model BudgetPolicy {
   id                    String       @id @default(uuid())
   organizationId        String
   name                  String
-  maxRunCostUsd         Decimal?     @db.Decimal(10, 2)
-  maxRunDurationSeconds Int?
+  maxCostPerRun         Decimal?     @db.Decimal(12, 4)
+  maxTokensPerRun       Int?
+  maxActionsPerAgent    Int?
+  maxDurationPerRunSeconds Int?
+  maxDailyCost          Decimal?     @db.Decimal(12, 4)
+  stopOnBudgetExceeded  Boolean      @default(true)
   isActive              Boolean      @default(true)
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
@@ -341,4 +347,23 @@ model BudgetPolicy {
   simulationRuns        SimulationRun[]
 
   @@unique([organizationId, name])
+}
+
+model LlmUsage {
+  id               String        @id @default(uuid())
+  organizationId   String
+  runId            String
+  agentId          String?
+  provider         String
+  model            String
+  inputTokens      Int
+  outputTokens     Int
+  totalTokens      Int
+  estimatedCostUsd Decimal       @db.Decimal(12, 6)
+  createdAt        DateTime      @default(now())
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  simulationRun    SimulationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([organizationId, createdAt])
 }

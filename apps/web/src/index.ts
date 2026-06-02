@@ -802,7 +802,7 @@ app.post("/dashboard/llm-providers/:configId/test", async (req, res) => {
 type BudgetPolicy = {
   id: string;
   name: string;
-  maxRunDurationSeconds: number | null;
+  maxDurationPerRunSeconds: number | null;
 };
 
 type RunSetupOptions = {

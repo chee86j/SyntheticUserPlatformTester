@@ -10,6 +10,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/require-au
 import { decryptSecret, encryptSecret } from "../auth/secret-encryption.js";
 import { emitRunEvent } from "../realtime/socket.js";
 import { cancelRunJobs, enqueueAgentJob, enqueueSimulationRun } from "../queues/queues.js";
+import { LlmGatewayService } from "../services/llm-gateway-service.js";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -21,6 +22,7 @@ const budgetPolicyRepository = new BudgetPolicyRepository();
 const eventRepository = new EventRepository();
 const artifactRepository = new ArtifactRepository();
 const llmProviderConfigRepository = new LlmProviderConfigRepository();
+const llmGatewayService = new LlmGatewayService();
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
@@ -73,6 +75,15 @@ const llmConfigUpdateSchema = z.object({
   isActive: z.boolean().optional()
 });
 const llmConfigIdParamsSchema = z.object({ configId: z.string().uuid() });
+const llmCompleteSchema = z.object({
+  runId: z.string().uuid(),
+  agentId: z.string().uuid().optional(),
+  providerConfigId: z.string().uuid(),
+  prompt: z.string().min(1),
+  maxTokens: z.number().int().positive().max(8192).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  responseFormat: z.enum(["text", "json"]).default("text")
+});
 
 function normalizeAllowedDomains(rawDomains: string[]): string[] {
   const normalized = rawDomains
@@ -949,6 +960,56 @@ protectedRouter.post("/llm/providers/:configId/test", async (req: AuthenticatedR
   }
 });
 
+protectedRouter.post("/llm/complete", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = llmCompleteSchema.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid llm completion payload" });
+
+  const run = await runRepository.getById(parsed.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  if (parsed.data.agentId) {
+    const agent = await runRepository.getAgentById(parsed.data.agentId);
+    if (!agent || agent.simulationRunId !== parsed.data.runId) {
+      return void res.status(400).json({ error: "Agent does not belong to run" });
+    }
+  }
+
+  try {
+    const result = await llmGatewayService.execute({
+      organizationId: user.organizationId,
+      runId: parsed.data.runId,
+      agentId: parsed.data.agentId,
+      providerConfigId: parsed.data.providerConfigId,
+      request: {
+        prompt: parsed.data.prompt,
+        maxTokens: parsed.data.maxTokens,
+        temperature: parsed.data.temperature,
+        responseFormat: parsed.data.responseFormat
+      }
+    });
+
+    res.json({
+      text: result.response.text,
+      parsedJson: result.response.parsedJson,
+      inputTokens: result.response.inputTokens ?? result.usage.inputTokens,
+      outputTokens: result.response.outputTokens ?? result.usage.outputTokens,
+      estimatedCost: result.response.estimatedCost ?? result.usage.estimatedCostUsd,
+      totals: result.totals
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LLM completion failed";
+    if (message.toLowerCase().includes("budget exceeded")) {
+      return void res.status(402).json({ error: message });
+    }
+    res.status(400).json({ error: message });
+  }
+});
+
 protectedRouter.post("/demo-runs/20-agent", async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -1220,6 +1281,18 @@ protectedRouter.get("/runs/:runId/events", async (req: AuthenticatedRequest, res
 
   const events = await eventRepository.listByRunForOrganization(params.data.runId, user.organizationId);
   res.json({ events });
+});
+
+protectedRouter.get("/runs/:runId/budget-summary", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const summary = await llmGatewayService.getRunBudgetSummary(params.data.runId, user.organizationId);
+  if (!summary) return void res.status(404).json({ error: "Run not found" });
+  res.json({ summary });
 });
 
 protectedRouter.get("/runs/:runId/artifacts", async (req: AuthenticatedRequest, res) => {
