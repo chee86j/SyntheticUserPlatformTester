@@ -1,5 +1,4 @@
 import { mkdir } from "node:fs/promises";
-import path from "node:path";
 import { EventSeverity, RunStatus } from "@prisma/client";
 import {
   ArtifactRepository,
@@ -12,6 +11,7 @@ import {
 } from "@synthetic/database";
 import { env } from "./lib/config.js";
 import { RunnerApiClient } from "./lib/api-client.js";
+import { getRunDirectory } from "./lib/paths.js";
 import { buildScript } from "./lib/script-builder.js";
 import { executeScriptedWorkflow } from "./lib/playwright-runner.js";
 import { decryptSecret } from "./lib/secrets.js";
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
     throw new Error("Test account reservation failed");
   }
 
-  const runDir = path.join(process.cwd(), "runs", run.id, agent.id);
+  const runDir = getRunDirectory(run.id, agent.id);
   await mkdir(runDir, { recursive: true });
 
   try {

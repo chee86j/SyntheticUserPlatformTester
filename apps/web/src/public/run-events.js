@@ -172,8 +172,32 @@ function useRunEvents(config) {
   const artifactSeenRef = React.useRef(new Set(artifacts.map((artifact) => artifact.id)));
 
   React.useEffect(() => {
+    artifactSeenRef.current = new Set(artifacts.map((artifact) => artifact.id));
+  }, [artifacts]);
+
+  React.useEffect(() => {
     let mounted = true;
     const socket = io(config.apiBaseUrl, { withCredentials: true, reconnection: true });
+
+    async function fetchArtifacts() {
+      const response = await fetch(`${config.apiBaseUrl}/api/runs/${config.runId}/artifacts`, {
+        method: "GET",
+        credentials: "include"
+      });
+      if (!response.ok || !mounted) return;
+      const payload = await response.json();
+      const nextArtifacts = Array.isArray(payload.artifacts) ? payload.artifacts : [];
+      setArtifacts((prev) => {
+        const merged = [...prev];
+        for (const artifact of nextArtifacts) {
+          if (!artifactSeenRef.current.has(artifact.id)) {
+            artifactSeenRef.current.add(artifact.id);
+            merged.push(artifact);
+          }
+        }
+        return merged;
+      });
+    }
 
     async function fetchHistorical() {
       const response = await fetch(`${config.apiBaseUrl}/api/runs/${config.runId}/events`, {
@@ -199,6 +223,9 @@ function useRunEvents(config) {
       if (!event || !event.id || seenRef.current.has(event.id)) return;
       seenRef.current.add(event.id);
       setEvents((prev) => [...prev, event]);
+      if (event.eventType === "artifact.created") {
+        void fetchArtifacts();
+      }
     };
 
     socket.on("connect", () => {
@@ -218,6 +245,7 @@ function useRunEvents(config) {
     socket.on("event.created", onEvent);
 
     void fetchHistorical();
+    void fetchArtifacts();
 
     return () => {
       mounted = false;
@@ -290,6 +318,10 @@ function DashboardApp({ config }) {
   const { events, artifacts, budgetSummary } = useRunEvents(config);
   const dashboard = React.useMemo(() => buildDashboard(events), [events]);
   const rc = Recharts;
+  const latestReport = artifacts
+    .filter((artifact) => artifact.type === "REPORT")
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
   const cards = dashboard.cards;
   const avgCompletionLabel = cards.avgCompletionTimeMs === null ? "n/a" : `${Math.round(cards.avgCompletionTimeMs)} ms`;
@@ -309,6 +341,28 @@ function DashboardApp({ config }) {
   return React.createElement(
     "div",
     { className: "space-y-6" },
+    latestReport
+      ? React.createElement(
+          "div",
+          { className: "flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" },
+          React.createElement(
+            "div",
+            null,
+            React.createElement("p", { className: "text-sm font-semibold text-emerald-900" }, "Executive report ready"),
+            React.createElement("p", { className: "text-xs text-emerald-800" }, "Open the generated markdown summary for this run.")
+          ),
+          React.createElement(
+            "a",
+            {
+              className: "rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white no-underline",
+              href: getArtifactHref(latestReport, config),
+              target: "_blank",
+              rel: "noreferrer"
+            },
+            "Open report"
+          )
+        )
+      : null,
     React.createElement(
       "div",
       { className: "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" },
@@ -524,7 +578,12 @@ function DashboardApp({ config }) {
                   ),
                   React.createElement(
                     "a",
-                    { className: "mt-1 block break-all text-xs text-blue-600 underline", href: artifact.uri, target: "_blank", rel: "noreferrer" },
+                    {
+                      className: "mt-1 block break-all text-xs text-blue-600 underline",
+                      href: getArtifactHref(artifact, config),
+                      target: "_blank",
+                      rel: "noreferrer"
+                    },
                     artifact.uri
                   )
                 )
@@ -532,6 +591,12 @@ function DashboardApp({ config }) {
       )
     )
   );
+}
+
+function getArtifactHref(artifact, config) {
+  if (!artifact || !artifact.uri) return "#";
+  if (/^https?:\/\//i.test(artifact.uri)) return artifact.uri;
+  return `${config.apiBaseUrl}/api/runs/${config.runId}/artifacts/${artifact.id}/content`;
 }
 
 function mount() {

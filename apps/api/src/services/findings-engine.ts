@@ -54,7 +54,14 @@ export class FindingsEngine {
       workflowName: run.workflow.name,
       workflowGoal: run.workflow.goal,
       successCriteria: run.workflow.successCriteria,
-      events,
+      events: events.map((event) => ({
+        id: event.id,
+        eventType: event.eventType,
+        severity: event.severity,
+        payload: asRecord(event.payload),
+        agentId: event.agentId,
+        personaId: event.personaId
+      })),
       agents,
       artifacts,
       personas: selectedPersonas
@@ -275,4 +282,9 @@ function dedupeFindings(findings: RuleFinding[]): RuleFinding[] {
     deduped.push(finding);
   }
   return deduped;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }

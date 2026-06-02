@@ -47,13 +47,34 @@ export class EventEmitterService {
 }
 
 function redactSensitivePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return sanitizeRecord(payload);
+}
+
+function sanitizeRecord(payload: Record<string, unknown>): Record<string, unknown> {
   const secretKeys = ["password", "token", "cookie", "authorization"];
   return Object.fromEntries(
     Object.entries(payload).map(([key, value]) => {
-      if (secretKeys.some((s) => key.toLowerCase().includes(s))) {
+      if (secretKeys.some((secret) => key.toLowerCase().includes(secret))) {
         return [key, "[redacted]"];
       }
-      return [key, value];
+
+      return [key, sanitizeValue(value)];
     })
   );
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.length <= 500 ? value : `${value.slice(0, 497)}...`;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    return sanitizeRecord(value as Record<string, unknown>);
+  }
+
+  return value;
 }

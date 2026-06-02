@@ -394,7 +394,29 @@ export class RunRepository {
   }
 
   async updateStatus(runId: string, status: RunStatus) {
-    return prisma.simulationRun.update({ where: { id: runId }, data: { status } });
+    return prisma.simulationRun.update({
+      where: { id: runId },
+      data: {
+        status,
+        ...(status === RunStatus.RUNNING ? { startedAt: new Date(), finishedAt: null } : {}),
+        ...(status === RunStatus.COMPLETED || status === RunStatus.FAILED || status === RunStatus.CANCELED
+          ? { finishedAt: new Date() }
+          : {})
+      }
+    });
+  }
+
+  async finalizeStatus(runId: string, status: RunStatus) {
+    return prisma.simulationRun.updateMany({
+      where: {
+        id: runId,
+        status: { in: [RunStatus.PENDING, RunStatus.RUNNING] }
+      },
+      data: {
+        status,
+        finishedAt: new Date()
+      }
+    });
   }
 
   async getById(runId: string) {
@@ -407,7 +429,8 @@ export class RunRepository {
       include: {
         environment: true,
         workflow: true,
-        project: true
+        project: true,
+        budgetPolicy: true
       }
     });
   }
@@ -592,6 +615,16 @@ export class EventRepository {
 export class ArtifactRepository {
   async create(input: ArtifactCreateInput) {
     return prisma.artifact.create({ data: input });
+  }
+
+  async findByIdForRunForOrganization(artifactId: string, runId: string, organizationId: string) {
+    return prisma.artifact.findFirst({
+      where: {
+        id: artifactId,
+        simulationRunId: runId,
+        simulationRun: { organizationId }
+      }
+    });
   }
 
   async listByRunForOrganization(runId: string, organizationId: string) {

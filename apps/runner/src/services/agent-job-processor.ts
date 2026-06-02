@@ -1,11 +1,12 @@
 import { mkdir } from "node:fs/promises";
-import path from "node:path";
 import { ArtifactRepository, RunRepository, TestAccountRepository } from "@synthetic/database";
 import { RunStatus, type EventSeverity } from "@prisma/client";
 import { buildScript } from "../lib/script-builder.js";
 import { executeScriptedWorkflow, ProductWorkflowError } from "../lib/playwright-runner.js";
+import { getRunDirectory } from "../lib/paths.js";
 import { decryptSecret } from "../lib/secrets.js";
 import { env } from "../lib/config.js";
+import { enqueueReportJob } from "../queue/queues.js";
 import { AccountReservationService } from "./account-reservation-service.js";
 import { EventEmitterService } from "./event-emitter-service.js";
 
@@ -49,7 +50,7 @@ export class AgentJobProcessor {
 
     await this.reservationService.reserve({ accountId: account.id, runId: run.id, agentId: agent.id });
 
-    const runDir = path.join(process.cwd(), "runs", run.id, agent.id);
+    const runDir = getRunDirectory(run.id, agent.id);
     await mkdir(runDir, { recursive: true });
 
     try {
@@ -129,14 +130,30 @@ export class AgentJobProcessor {
     if (incomplete.length > 0) return;
 
     const failed = agents.some((agent) => agent.status === "FAILED");
-    await this.runRepository.updateStatus(runId, failed ? RunStatus.FAILED : RunStatus.COMPLETED);
+    const finalized = await this.runRepository.finalizeStatus(runId, failed ? RunStatus.FAILED : RunStatus.COMPLETED);
+    if (finalized.count === 0) {
+      const run = await this.runRepository.getById(runId);
+      if (run && (run.status === RunStatus.COMPLETED || run.status === RunStatus.FAILED)) {
+        await enqueueReportJob(runId);
+      }
+      return;
+    }
 
     await this.eventEmitter.emit({
       runId,
       eventType: failed ? "run.failed" : "run.completed",
       severity: failed ? "CRITICAL" : "INFO",
-      payload: { failedAgents: agents.filter((agent) => agent.status === "FAILED").length }
+      payload: failed
+        ? {
+            reason: "One or more agents failed during execution",
+            failedAgents: agents.filter((agent) => agent.status === "FAILED").length
+          }
+        : {
+            failedAgents: 0
+          }
     });
+
+    await enqueueReportJob(runId);
   }
 }
 

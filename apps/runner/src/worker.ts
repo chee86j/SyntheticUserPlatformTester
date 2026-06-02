@@ -2,10 +2,19 @@ import { Worker } from "bullmq";
 import { ArtifactRepository, RunRepository, TestAccountRepository } from "@synthetic/database";
 import { env } from "./lib/config.js";
 import { RunnerApiClient } from "./lib/api-client.js";
-import { agentJobsQueue, redisConnection, reportJobsQueue, simulationRunsQueue, type AgentJob, type SimulationRunJob } from "./queue/queues.js";
+import {
+  agentJobsQueue,
+  redisConnection,
+  reportJobsQueue,
+  simulationRunsQueue,
+  type AgentJob,
+  type ReportJob,
+  type SimulationRunJob
+} from "./queue/queues.js";
 import { AccountReservationService } from "./services/account-reservation-service.js";
 import { AgentJobProcessor } from "./services/agent-job-processor.js";
 import { EventEmitterService } from "./services/event-emitter-service.js";
+import { RunReportService } from "./services/run-report-service.js";
 import { RunOrchestrator } from "./services/run-orchestrator.js";
 
 const api = new RunnerApiClient();
@@ -26,6 +35,7 @@ const agentProcessor = new AgentJobProcessor(
   accountReservationService,
   eventEmitter
 );
+const runReportService = new RunReportService(runRepository, eventEmitter);
 
 const simulationWorker = new Worker<SimulationRunJob>(
   simulationRunsQueue.name,
@@ -43,10 +53,10 @@ const agentWorker = new Worker<AgentJob>(
   { connection: redisConnection, concurrency: env.MAX_PARALLEL_AGENTS }
 );
 
-const reportWorker = new Worker(
+const reportWorker = new Worker<ReportJob>(
   reportJobsQueue.name,
-  async () => {
-    // Placeholder for report aggregation queue in MVP.
+  async (job) => {
+    await runReportService.generate(job.data.runId);
   },
   { connection: redisConnection, concurrency: 1 }
 );

@@ -13,7 +13,7 @@ export async function enqueueSimulationRun(runId: string): Promise<void> {
     "orchestrate-run",
     { runId },
     {
-      jobId: `simulation-run:${runId}`,
+      jobId: `simulation-run-${runId}`,
       removeOnComplete: true,
       removeOnFail: 200
     }
@@ -25,7 +25,7 @@ export async function enqueueAgentJob(input: { runId: string; agentId: string })
     "run-agent",
     { runId: input.runId, agentId: input.agentId },
     {
-      jobId: `agent:${input.agentId}`,
+      jobId: `agent-${input.agentId}`,
       removeOnComplete: true,
       removeOnFail: 200,
       attempts: 3,
@@ -35,7 +35,7 @@ export async function enqueueAgentJob(input: { runId: string; agentId: string })
 }
 
 export async function cancelRunJobs(runId: string): Promise<void> {
-  const simulationJob = await simulationRunsQueue.getJob(`simulation-run:${runId}`);
+  const simulationJob = await simulationRunsQueue.getJob(`simulation-run-${runId}`);
   if (simulationJob) await simulationJob.remove();
 
   const waiting = await agentJobsQueue.getJobs(["waiting", "delayed", "prioritized"]);

@@ -1,3 +1,6 @@
+import { access } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ArtifactRepository, BudgetPolicyRepository, EnvironmentRepository, EventRepository, PersonaRepository, ProjectRepository, RunRepository, TestAccountRepository, WorkflowRepository } from "@synthetic/database";
 import { LlmProviderConfigRepository } from "@synthetic/database";
 import { createLlmProvider } from "@synthetic/llm-gateway";
@@ -23,9 +26,12 @@ const eventRepository = new EventRepository();
 const artifactRepository = new ArtifactRepository();
 const llmProviderConfigRepository = new LlmProviderConfigRepository();
 const llmGatewayService = new LlmGatewayService();
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+const artifactRoots = [path.join(repoRoot, "runs"), path.join(repoRoot, "apps", "runner", "runs")];
 
 const projectCreateSchema = z.object({ name: z.string().trim().min(1).max(120) });
 const projectUpdateSchema = z.object({ name: z.string().trim().min(1).max(120) });
+const artifactContentParamsSchema = z.object({ runId: z.string().uuid(), artifactId: z.string().uuid() });
 
 const environmentTypeSchema = z.enum(["LOCAL", "STAGING", "DEMO"]);
 const environmentStatusSchema = z.enum(["ACTIVE", "INACTIVE", "UNREACHABLE"]);
@@ -1309,4 +1315,48 @@ protectedRouter.get("/runs/:runId/artifacts", async (req: AuthenticatedRequest, 
 
   const artifacts = await artifactRepository.listByRunForOrganization(params.data.runId, user.organizationId);
   res.json({ artifacts });
+});
+
+protectedRouter.get("/runs/:runId/artifacts/:artifactId/content", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = artifactContentParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid artifact request" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const artifact = await artifactRepository.findByIdForRunForOrganization(
+    params.data.artifactId,
+    params.data.runId,
+    user.organizationId
+  );
+  if (!artifact) return void res.status(404).json({ error: "Artifact not found" });
+
+  if (/^https?:\/\//i.test(artifact.uri)) {
+    return void res.redirect(artifact.uri);
+  }
+
+  const resolvedPath = path.resolve(artifact.uri);
+  const isAllowedPath = artifactRoots.some(
+    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}${path.sep}`)
+  );
+  if (!isAllowedPath) {
+    return void res.status(403).json({ error: "Artifact path is not allowed" });
+  }
+
+  try {
+    await access(resolvedPath);
+  } catch {
+    return void res.status(404).json({ error: "Artifact file not found" });
+  }
+
+  if (artifact.type === "REPORT") {
+    res.type("text/markdown; charset=utf-8");
+  }
+
+  res.sendFile(resolvedPath);
 });

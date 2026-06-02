@@ -38,7 +38,7 @@ export class RunOrchestrator {
         "run-agent",
         { runId: run.id, agentId: agent.id },
         {
-          jobId: `agent:${agent.id}`,
+          jobId: `agent-${agent.id}`,
           removeOnComplete: true,
           removeOnFail: 200,
           attempts: 3,

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@synthetic/database": "0.1.0",
+    "@synthetic/reports": "0.1.0",
     "@synthetic/shared": "0.1.0",
     "bullmq": "^5.58.5",
     "dotenv": "^16.6.1",
