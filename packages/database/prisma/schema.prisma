@@ -76,10 +76,21 @@ enum ArtifactType {
 }
 
 enum FindingType {
-  UX
-  RELIABILITY
-  AUTH
-  PERFORMANCE
+  UX_FRICTION
+  BUG
+  PERFORMANCE_ISSUE
+  ACCESSIBILITY_CONCERN
+  WORKFLOW_FAILURE
+  SECURITY_CONCERN
+  DATA_VALIDATION_ISSUE
+  CONFUSING_COPY
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 model Organization {
@@ -303,14 +314,21 @@ model Artifact {
 }
 
 model Finding {
-  id              String        @id @default(uuid())
-  simulationRunId String
-  type            FindingType
-  title           String
-  detail          String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  simulationRun   SimulationRun @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+  id               String          @id @default(uuid())
+  simulationRunId  String
+  type             FindingType
+  title            String
+  summary          String
+  severity         FindingSeverity
+  confidence       Decimal         @db.Decimal(5, 2)
+  affectedPersonas String[]        @default([])
+  affectedWorkflow String
+  evidenceEventIds String[]        @default([])
+  recommendation   String
+  detail           String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  simulationRun    SimulationRun   @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
 }
 
 model LlmProviderConfig {

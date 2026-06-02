@@ -4,6 +4,7 @@ export {
   WorkflowRepository,
   EventRepository,
   ArtifactRepository,
+  FindingRepository,
   UserRepository,
   ProjectRepository,
   EnvironmentRepository,
@@ -24,4 +25,6 @@ export type {
   ProjectCreateInput,
   ProjectUpdateInput,
   LlmUsageCreateInput
+  ,
+  FindingCreateInput
 } from "./repositories/index.js";

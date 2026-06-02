@@ -32,7 +32,10 @@ CREATE TYPE "EventSeverity" AS ENUM ('INFO', 'WARNING', 'ERROR', 'CRITICAL');
 CREATE TYPE "ArtifactType" AS ENUM ('SCREENSHOT', 'TRACE', 'VIDEO', 'CONSOLE_LOG', 'NETWORK_LOG', 'REPORT');
 
 -- CreateEnum
-CREATE TYPE "FindingType" AS ENUM ('UX', 'RELIABILITY', 'AUTH', 'PERFORMANCE');
+CREATE TYPE "FindingType" AS ENUM ('UX_FRICTION', 'BUG', 'PERFORMANCE_ISSUE', 'ACCESSIBILITY_CONCERN', 'WORKFLOW_FAILURE', 'SECURITY_CONCERN', 'DATA_VALIDATION_ISSUE', 'CONFUSING_COPY');
+
+-- CreateEnum
+CREATE TYPE "FindingSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
 
 -- CreateTable
 CREATE TABLE "Organization" (
@@ -231,6 +234,13 @@ CREATE TABLE "Finding" (
     "simulationRunId" TEXT NOT NULL,
     "type" "FindingType" NOT NULL,
     "title" TEXT NOT NULL,
+    "summary" TEXT NOT NULL,
+    "severity" "FindingSeverity" NOT NULL,
+    "confidence" DECIMAL(5,2) NOT NULL,
+    "affectedPersonas" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "affectedWorkflow" TEXT NOT NULL,
+    "evidenceEventIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "recommendation" TEXT NOT NULL,
     "detail" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

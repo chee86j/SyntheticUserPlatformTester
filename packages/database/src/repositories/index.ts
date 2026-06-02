@@ -75,6 +75,28 @@ export type ArtifactCreateInput = {
   uri: string;
 };
 
+export type FindingCreateInput = {
+  simulationRunId: string;
+  type:
+    | "UX_FRICTION"
+    | "BUG"
+    | "PERFORMANCE_ISSUE"
+    | "ACCESSIBILITY_CONCERN"
+    | "WORKFLOW_FAILURE"
+    | "SECURITY_CONCERN"
+    | "DATA_VALIDATION_ISSUE"
+    | "CONFUSING_COPY";
+  title: string;
+  summary: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  confidence: number;
+  affectedPersonas: string[];
+  affectedWorkflow: string;
+  evidenceEventIds: string[];
+  recommendation: string;
+  detail?: string | null;
+};
+
 export type LlmUsageCreateInput = {
   organizationId: string;
   runId: string;
@@ -574,6 +596,41 @@ export class ArtifactRepository {
 
   async listByRunForOrganization(runId: string, organizationId: string) {
     return prisma.artifact.findMany({
+      where: { simulationRunId: runId, simulationRun: { organizationId } },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+}
+
+export class FindingRepository {
+  async replaceForRun(simulationRunId: string, findings: FindingCreateInput[]) {
+    await prisma.finding.deleteMany({ where: { simulationRunId } });
+    if (findings.length === 0) return { count: 0 };
+
+    const created = await prisma.$transaction(
+      findings.map((finding) =>
+        prisma.finding.create({
+          data: {
+            simulationRunId: finding.simulationRunId,
+            type: finding.type,
+            title: finding.title,
+            summary: finding.summary,
+            severity: finding.severity,
+            confidence: new Prisma.Decimal(finding.confidence),
+            affectedPersonas: finding.affectedPersonas,
+            affectedWorkflow: finding.affectedWorkflow,
+            evidenceEventIds: finding.evidenceEventIds,
+            recommendation: finding.recommendation,
+            detail: finding.detail ?? null
+          }
+        })
+      )
+    );
+    return { count: created.length };
+  }
+
+  async listByRunForOrganization(runId: string, organizationId: string) {
+    return prisma.finding.findMany({
       where: { simulationRunId: runId, simulationRun: { organizationId } },
       orderBy: { createdAt: "desc" }
     });
