@@ -3,8 +3,9 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "../lib/config.js";
 import { AgentMemoryService } from "./agent-memory-service.js";
 import { AgentPromptBuilder } from "./agent-prompt-builder.js";
-import { LlmActionParser } from "./llm-action-parser.js";
+import { LlmActionParser, type LlmAction } from "./llm-action-parser.js";
 import { PageObservationService } from "./page-observation-service.js";
+import { PersonaBehaviorService, type PersonaTraits } from "./persona-behavior-service.js";
 import { SafeActionExecutor } from "./safe-action-executor.js";
 
 type EmitFn = (input: {
@@ -65,7 +66,9 @@ export async function executeLlmDrivenWorkflow(input: {
   const promptBuilder = new AgentPromptBuilder();
   const parser = new LlmActionParser();
   const observationService = new PageObservationService();
+  const behaviorService = new PersonaBehaviorService();
   const executor = new SafeActionExecutor();
+  const behaviorProfile = behaviorService.buildProfile(input.personaTraits as PersonaTraits | null);
 
   const maxSteps = Math.min(input.workflow.maxSteps, input.maxActionsPerAgent ?? input.workflow.maxSteps);
 
@@ -84,7 +87,9 @@ export async function executeLlmDrivenWorkflow(input: {
     const prompt = promptBuilder.buildPrompt({
       observation,
       successCriteria: input.workflow.successCriteria,
-      maxActionsRemaining: maxSteps - stepIndex
+      maxActionsRemaining: maxSteps - stepIndex,
+      personaInstructions: behaviorProfile.promptInstructions,
+      thresholds: behaviorProfile.thresholds
     });
 
     const llm = await input.llmComplete({ prompt, runId: input.runId, agentId: input.agentId });
@@ -111,6 +116,7 @@ export async function executeLlmDrivenWorkflow(input: {
     }
 
     const startedAt = Date.now();
+    const frustrationBefore = memory.frustrationScore();
     await input.emit({
       eventType: "action.started",
       payload: {
@@ -118,7 +124,8 @@ export async function executeLlmDrivenWorkflow(input: {
         target: action.target,
         reason: action.reason,
         confidence: action.confidence,
-        frustrationScore: memory.frustrationScore(),
+        frustrationScore: frustrationBefore,
+        confusionScore: memory.confusionScore(),
         index: stepIndex
       }
     });
@@ -129,13 +136,15 @@ export async function executeLlmDrivenWorkflow(input: {
       target: action.target,
       result: "started",
       reason: action.reason,
-      frustrationDelta: action.frustrationDelta
+      frustrationDelta: action.frustrationDelta,
+      confidence: action.confidence
     });
 
     try {
+      const adjustedAction = adjustActionForPersona(action, behaviorProfile.thresholds.maxWaitMs);
       const result = await executor.execute({
         page: input.page,
-        action,
+        action: adjustedAction,
         runDir: input.runDir,
         stepIndex
       });
@@ -148,26 +157,64 @@ export async function executeLlmDrivenWorkflow(input: {
 
       memory.record({
         timestamp: new Date().toISOString(),
-        action: action.action,
-        target: action.target,
+        action: adjustedAction.action,
+        target: adjustedAction.target,
         result: "completed",
-        reason: action.reason,
-        frustrationDelta: action.frustrationDelta
+        reason: adjustedAction.reason,
+        frustrationDelta: behaviorService.estimateFrustrationDelta({
+          action: adjustedAction.action,
+          success: true,
+          confidence: adjustedAction.confidence,
+          durationMs: Date.now() - startedAt,
+          thresholds: behaviorProfile.thresholds
+        }),
+        confidence: adjustedAction.confidence
       });
+
+      const frustrationAfter = memory.frustrationScore();
+      if (frustrationAfter !== frustrationBefore) {
+        await input.emit({
+          eventType: "action.completed",
+          severity: "INFO",
+          payload: {
+            action: "metric.frustration.changed",
+            frustrationBefore,
+            frustrationAfter,
+            confusionScore: memory.confusionScore(),
+            stepIndex
+          }
+        });
+      }
 
       await input.emit({
         eventType: "action.completed",
         payload: {
-          action: action.action,
-          target: action.target,
-          reason: action.reason,
-          confidence: action.confidence,
+          action: adjustedAction.action,
+          target: adjustedAction.target,
+          reason: adjustedAction.reason,
+          confidence: adjustedAction.confidence,
           durationMs: Date.now() - startedAt,
-          frustrationDelta: action.frustrationDelta,
-          frustrationScore: memory.frustrationScore(),
+          frustrationDelta: frustrationAfter - frustrationBefore,
+          frustrationScore: frustrationAfter,
+          confusionScore: memory.confusionScore(),
           index: stepIndex
         }
       });
+
+      if (frustrationAfter >= behaviorProfile.thresholds.abandonmentThreshold) {
+        await input.emit({
+          eventType: "action.failed",
+          severity: "WARNING",
+          payload: {
+            action: "abandonment.threshold",
+            threshold: behaviorProfile.thresholds.abandonmentThreshold,
+            frustrationScore: frustrationAfter,
+            confusionScore: memory.confusionScore(),
+            reason: "Persona abandoned workflow due to frustration"
+          }
+        });
+        return { completed: false, steps: stepIndex + 1 };
+      }
 
       if (result.terminal) {
         return { completed: result.success, steps: stepIndex + 1 };
@@ -184,8 +231,34 @@ export async function executeLlmDrivenWorkflow(input: {
         target: action.target,
         result: "failed",
         reason: action.reason,
-        frustrationDelta: action.frustrationDelta
+        frustrationDelta: behaviorService.estimateFrustrationDelta({
+          action: action.action,
+          success: false,
+          confidence: action.confidence,
+          durationMs: Date.now() - startedAt,
+          thresholds: behaviorProfile.thresholds
+        }),
+        confidence: action.confidence
       });
+
+      const mayRetry =
+        behaviorProfile.thresholds.retryTendency >= 0.6 &&
+        action.action !== "fail" &&
+        action.action !== "finish";
+      if (mayRetry) {
+        await input.emit({
+          eventType: "action.completed",
+          severity: "WARNING",
+          payload: {
+            action: "metric.retry.attempted",
+            originalAction: action.action,
+            retryTendency: behaviorProfile.thresholds.retryTendency,
+            frustrationScore: memory.frustrationScore(),
+            confusionScore: memory.confusionScore(),
+            index: stepIndex
+          }
+        });
+      }
 
       await input.emit({
         eventType: "action.failed",
@@ -196,11 +269,15 @@ export async function executeLlmDrivenWorkflow(input: {
           reason: action.reason,
           confidence: action.confidence,
           error: error instanceof Error ? error.message : "Action execution failed",
-          frustrationDelta: action.frustrationDelta,
+          frustrationDelta: memory.frustrationScore() - frustrationBefore,
           frustrationScore: memory.frustrationScore(),
+          confusionScore: memory.confusionScore(),
           index: stepIndex
         }
       });
+      if (mayRetry) {
+        continue;
+      }
       throw error;
     }
   }
@@ -303,6 +380,15 @@ export async function runSingleLlmAgent(input: {
     }
     await browser.close();
   }
+}
+
+function adjustActionForPersona(action: LlmAction, maxWaitMs: number): LlmAction {
+  if (action.action !== "wait") return action;
+  const requested = Number(action.target);
+  if (!Number.isFinite(requested) || requested <= 0) {
+    return { ...action, target: String(Math.min(1000, maxWaitMs)) };
+  }
+  return { ...action, target: String(Math.min(requested, maxWaitMs)) };
 }
 
 async function isSuccessCriteriaMet(page: Page, successCriteria: unknown): Promise<boolean> {

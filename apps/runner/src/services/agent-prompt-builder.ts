@@ -5,6 +5,13 @@ export class AgentPromptBuilder {
     observation: PageObservation;
     successCriteria: unknown;
     maxActionsRemaining: number;
+    personaInstructions: string[];
+    thresholds: {
+      maxWaitMs: number;
+      abandonmentThreshold: number;
+      retryTendency: number;
+      explorationTendency: number;
+    };
   }): string {
     return [
       "You are a synthetic user agent. Choose exactly one next UI action.",
@@ -17,6 +24,12 @@ export class AgentPromptBuilder {
       "",
       "Success criteria:",
       JSON.stringify(input.successCriteria),
+      "",
+      "Persona behavior instructions:",
+      ...input.personaInstructions.map((item, index) => `${index + 1}. ${item}`),
+      "",
+      "Runtime behavior thresholds:",
+      JSON.stringify(input.thresholds),
       "",
       "Current page observation:",
       JSON.stringify({

@@ -1,21 +1,7 @@
 import type { Page } from "playwright";
 import { env } from "../lib/config.js";
 import type { AgentMemoryService } from "./agent-memory-service.js";
-
-type PersonaTraits = {
-  name: string;
-  role: string;
-  industry: string;
-  technicalProficiency: number;
-  domainExpertise: number;
-  timePressure: number;
-  patience: number;
-  confidence: number;
-  errorRecovery: number;
-  riskTolerance: number;
-  accessibilityNeeds: string[];
-  behaviorNotes: string;
-};
+import type { PersonaTraits } from "./persona-behavior-service.js";
 
 export type PageObservation = {
   currentUrl: string;

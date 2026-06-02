@@ -7,6 +7,7 @@ type MemoryEntry = {
   result: "started" | "completed" | "failed";
   reason: string;
   frustrationDelta: number;
+  confidence?: number;
 };
 
 export class AgentMemoryService {
@@ -25,5 +26,13 @@ export class AgentMemoryService {
 
   frustrationScore(): number {
     return this.entries.reduce((sum, item) => sum + item.frustrationDelta, 0);
+  }
+
+  confusionScore(): number {
+    return this.entries.reduce((sum, item) => {
+      if (item.result === "failed") return sum + 8;
+      if (typeof item.confidence === "number" && item.confidence < 0.45) return sum + 3;
+      return sum;
+    }, 0);
   }
 }
