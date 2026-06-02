@@ -3,6 +3,9 @@ import path from "node:path";
 import { EventSeverity, RunStatus } from "@prisma/client";
 import {
   ArtifactRepository,
+  BudgetPolicyRepository,
+  LlmProviderConfigRepository,
+  PersonaRepository,
   RunRepository,
   TestAccountRepository,
   disconnectDatabaseClient
@@ -12,10 +15,14 @@ import { RunnerApiClient } from "./lib/api-client.js";
 import { buildScript } from "./lib/script-builder.js";
 import { executeScriptedWorkflow } from "./lib/playwright-runner.js";
 import { decryptSecret } from "./lib/secrets.js";
+import { runSingleLlmAgent } from "./services/llm-agent-runner.js";
 
 const runRepository = new RunRepository();
 const testAccountRepository = new TestAccountRepository();
 const artifactRepository = new ArtifactRepository();
+const personaRepository = new PersonaRepository();
+const llmProviderConfigRepository = new LlmProviderConfigRepository();
+const budgetPolicyRepository = new BudgetPolicyRepository();
 
 async function main(): Promise<void> {
   const runId = env.RUN_ID;
@@ -100,33 +107,114 @@ async function main(): Promise<void> {
     await emit({ eventType: "agent.started", payload: { accountLabel: account.label } });
     await emit({ eventType: "agent.logged_in", payload: { accountLabel: account.label } });
 
-    const actions = buildScript(
-      {
-        startingPath: run.workflow.startingPath,
-        successCriteria: run.workflow.successCriteria
-      },
-      run.environment.baseUrl,
-      { username: account.username, password }
-    );
+    const persona = personaId
+      ? await personaRepository.findByIdForOrganization(personaId, run.organizationId)
+      : null;
+    const budgetPolicy = run.budgetPolicyId
+      ? await budgetPolicyRepository.findByIdForOrganization(run.budgetPolicyId, run.organizationId)
+      : null;
 
-    await executeScriptedWorkflow({
-      actions,
-      runDir,
-      emit: (payload) => emit({ ...payload, severity: payload.severity as EventSeverity | undefined }),
-      onArtifact: async (artifact) => {
-        await artifactRepository.create({
-          simulationRunId: run.id,
-          simulationAgentId: agent.id,
-          type: artifact.type,
-          uri: artifact.uri
-        });
+    let actionCount = 0;
+    const emitWithCount: typeof emit = async (input) => {
+      if (input.eventType === "action.completed") actionCount += 1;
+      await emit(input);
+    };
+
+    if (env.RUNNER_USE_LLM) {
+      const configId = await resolveProviderConfigId(run.organizationId);
+      if (!configId) throw new Error("No active LLM provider config available for LLM runner");
+
+      const startUrl = new URL(run.workflow.startingPath || "/", run.environment.baseUrl).toString();
+
+      const llmResult = await runSingleLlmAgent({
+        runId: run.id,
+        agentId: agent.id,
+        runDir,
+        startUrl,
+        workflow: {
+          goal: run.workflow.goal,
+          startingPath: run.workflow.startingPath,
+          maxSteps: run.workflow.maxSteps,
+          successCriteria: run.workflow.successCriteria
+        },
+        personaTraits: persona
+          ? {
+              name: persona.name,
+              role: persona.role,
+              industry: persona.industry,
+              technicalProficiency: persona.technicalProficiency,
+              domainExpertise: persona.domainExpertise,
+              timePressure: persona.timePressure,
+              patience: persona.patience,
+              confidence: persona.confidence,
+              errorRecovery: persona.errorRecovery,
+              riskTolerance: persona.riskTolerance,
+              accessibilityNeeds: persona.accessibilityNeeds,
+              behaviorNotes: persona.behaviorNotes
+            }
+          : null,
+        llmComplete: async ({ prompt: llmPrompt, runId: llmRunId, agentId: llmAgentId }) => {
+          const completion = await api.request<{
+            text?: string;
+            parsedJson?: unknown;
+          }>("/api/llm/complete", {
+            method: "POST",
+            body: {
+              runId: llmRunId,
+              agentId: llmAgentId,
+              providerConfigId: configId,
+              prompt: llmPrompt,
+              responseFormat: "json",
+              maxTokens: 450
+            }
+          });
+
+          return { text: completion.text, parsedJson: completion.parsedJson };
+        },
+        emit: (payload) => emitWithCount({ ...payload, severity: payload.severity as EventSeverity | undefined }),
+        onArtifact: async (artifact) => {
+          await artifactRepository.create({
+            simulationRunId: run.id,
+            simulationAgentId: agent.id,
+            type: artifact.type,
+            uri: artifact.uri
+          });
+        },
+        maxActionsPerAgent: budgetPolicy?.maxActionsPerAgent
+      });
+
+      if (!llmResult.completed) {
+        throw new Error("LLM agent did not satisfy workflow success criteria");
       }
-    });
+    } else {
+      const actions = buildScript(
+        {
+          startingPath: run.workflow.startingPath,
+          successCriteria: run.workflow.successCriteria
+        },
+        run.environment.baseUrl,
+        { username: account.username, password }
+      );
+
+      await executeScriptedWorkflow({
+        actions,
+        runDir,
+        emit: (payload) => emitWithCount({ ...payload, severity: payload.severity as EventSeverity | undefined }),
+        onArtifact: async (artifact) => {
+          await artifactRepository.create({
+            simulationRunId: run.id,
+            simulationAgentId: agent.id,
+            type: artifact.type,
+            uri: artifact.uri
+          });
+        }
+      });
+    }
 
     await runRepository.updateAgentStatus(agent.id, "COMPLETED", { finishedAt: new Date() });
-    await emit({ eventType: "workflow.completed", payload: { actions: actions.length } });
-    await emit({ eventType: "agent.completed", payload: { actions: actions.length } });
-    await emit({ eventType: "run.completed", payload: { actions: actions.length } });
+    await emit({ eventType: "workflow.completed", payload: { actions: actionCount } });
+    await emit({ eventType: "agent.completed", payload: { actions: actionCount } });
+    await emit({ eventType: "run.completed", payload: { actions: actionCount } });
 
     const hasOtherActiveAgents = false;
     if (!hasOtherActiveAgents) {
@@ -156,6 +244,13 @@ async function main(): Promise<void> {
 
     await disconnectDatabaseClient();
   }
+}
+
+async function resolveProviderConfigId(organizationId: string): Promise<string | null> {
+  if (env.RUNNER_LLM_PROVIDER_CONFIG_ID) return env.RUNNER_LLM_PROVIDER_CONFIG_ID;
+  const configs = await llmProviderConfigRepository.listByOrganization(organizationId);
+  const active = configs.find((config) => config.status === "active" && config.isActive);
+  return active?.id ?? null;
 }
 
 function resolveAccountPassword(encryptedPassword: string | null, secretRef: string | null): string {

@@ -9,7 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json",
-    "test": "node -e \"console.log('No tests yet for @synthetic/runner')\"",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start:agent": "tsx src/index.ts",
     "start:worker": "tsx src/worker.ts"

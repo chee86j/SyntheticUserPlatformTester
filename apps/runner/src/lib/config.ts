@@ -20,7 +20,10 @@ const envSchema = z.object({
   RUNNER_LOGIN_USERNAME_SELECTOR: z.string().default('input[name="username"], input[type="email"], #username'),
   RUNNER_LOGIN_PASSWORD_SELECTOR: z.string().default('input[name="password"], #password'),
   RUNNER_LOGIN_SUBMIT_SELECTOR: z.string().default('button[type="submit"], input[type="submit"]'),
-  RUNNER_SCRIPT_JSON: z.string().optional()
+  RUNNER_SCRIPT_JSON: z.string().optional(),
+  RUNNER_USE_LLM: z.coerce.boolean().default(false),
+  RUNNER_LLM_PROVIDER_CONFIG_ID: z.string().uuid().optional(),
+  RUNNER_OBS_TEXT_MAX_CHARS: z.coerce.number().int().min(200).max(8000).default(1600)
 });
 
 const parsed = envSchema.safeParse(process.env);
