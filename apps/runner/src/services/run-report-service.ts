@@ -34,6 +34,8 @@ export class RunReportService {
       throw new Error(`Run ${runId} not found`);
     }
 
+    await this.eventEmitter.generateFindings(run.id);
+
     const [agents, events, artifacts, personas, findings, llmUsage, budgetPolicy] = await Promise.all([
       this.runRepository.listAgentsByRun(run.id),
       this.eventRepository.listByRunForOrganization(run.id, run.organizationId),

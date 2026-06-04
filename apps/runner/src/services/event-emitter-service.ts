@@ -25,6 +25,13 @@ type EmittableEventType =
 export class EventEmitterService {
   constructor(private readonly api: RunnerApiClient) {}
 
+  async generateFindings(runId: string): Promise<{ findingsCreated: number }> {
+    return this.api.request(`/api/runs/${runId}/findings/generate`, {
+      method: "POST",
+      body: {}
+    });
+  }
+
   async emit(input: {
     runId: string;
     agentId?: string;

@@ -30,6 +30,7 @@ import { LlmGatewayService } from "../services/llm-gateway-service.js";
 import { RunCreateRateLimiter } from "../services/run-create-rate-limiter.js";
 import { parseActualMetricsCsv } from "../services/actual-metrics-csv.js";
 import { calculateGapPercent, deriveSyntheticPredictionMetrics } from "../services/prediction-accuracy-service.js";
+import { FindingsEngine } from "../services/findings-engine.js";
 import { getActiveTraceId } from "@synthetic/telemetry";
 
 const projectRepository = new ProjectRepository();
@@ -46,6 +47,7 @@ const actualMetricsImportRepository = new ActualMetricsImportRepository();
 const predictionAccuracyRepository = new PredictionAccuracyRepository();
 const llmProviderConfigRepository = new LlmProviderConfigRepository();
 const llmGatewayService = new LlmGatewayService();
+const findingsEngine = new FindingsEngine();
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 const artifactRoots = [path.join(repoRoot, "runs"), path.join(repoRoot, "apps", "runner", "runs")];
 const runCreateRateLimiter = new RunCreateRateLimiter(5, 60_000);
@@ -1579,6 +1581,27 @@ protectedRouter.get("/runs/:runId/findings", async (req: AuthenticatedRequest, r
 
   const findings = await findingRepository.listByRunForOrganization(params.data.runId, user.organizationId);
   res.json({ findings });
+});
+
+protectedRouter.post("/runs/:runId/findings/generate", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const result = await findingsEngine.generateForRun({
+    runId: run.id,
+    organizationId: user.organizationId,
+    userIdForBudget: user.id
+  });
+
+  res.json(result);
 });
 
 protectedRouter.get("/runs/:runId/artifacts", async (req: AuthenticatedRequest, res) => {

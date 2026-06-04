@@ -36,3 +36,26 @@ test("EventEmitterService redacts sensitive payload fields before sending", asyn
     }
   });
 });
+
+test("EventEmitterService requests findings generation through the API boundary", async () => {
+  const requests: Array<{ path: string; options?: { method?: string; body?: unknown } }> = [];
+  const service = new EventEmitterService({
+    request: async (path: string, options?: { method?: string; body?: unknown }) => {
+      requests.push({ path, options });
+      return { findingsCreated: 4 };
+    }
+  } as never);
+
+  const result = await service.generateFindings("run-42");
+
+  assert.deepEqual(result, { findingsCreated: 4 });
+  assert.deepEqual(requests, [
+    {
+      path: "/api/runs/run-42/findings/generate",
+      options: {
+        method: "POST",
+        body: {}
+      }
+    }
+  ]);
+});
