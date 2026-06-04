@@ -30,6 +30,7 @@ import { LlmGatewayService } from "../services/llm-gateway-service.js";
 import { RunCreateRateLimiter } from "../services/run-create-rate-limiter.js";
 import { parseActualMetricsCsv } from "../services/actual-metrics-csv.js";
 import { calculateGapPercent, deriveSyntheticPredictionMetrics } from "../services/prediction-accuracy-service.js";
+import { getActiveTraceId } from "@synthetic/telemetry";
 
 const projectRepository = new ProjectRepository();
 const environmentRepository = new EnvironmentRepository();
@@ -1520,6 +1521,7 @@ protectedRouter.post("/events", requireRole("OWNER", "ADMIN", "TESTER"), async (
     runId: parsed.data.runId,
     agentId: parsed.data.agentId,
     personaId: parsed.data.personaId,
+    traceId: parsed.data.traceId ?? getActiveTraceId() ?? undefined,
     eventType: parsed.data.eventType,
     severity: parsed.data.severity,
     payload: redactEventPayload(parsed.data.payload),

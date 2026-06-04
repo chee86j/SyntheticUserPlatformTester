@@ -40,6 +40,7 @@ export type EventCreateInput = {
   runId: string;
   agentId?: string;
   personaId?: string;
+  traceId?: string;
   eventType: SimulationEventType;
   severity?: EventSeverity;
   payload: unknown;
@@ -52,6 +53,7 @@ export function toSimulationEventCreateData(input: EventCreateInput) {
     runId: input.runId,
     agentId: input.agentId,
     personaId: input.personaId,
+    traceId: input.traceId,
     eventType: input.eventType,
     severity: input.severity ?? EventSeverity.INFO,
     payload: input.payload as Prisma.InputJsonValue,

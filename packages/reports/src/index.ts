@@ -50,6 +50,7 @@ type ReportEvent = {
   id: string;
   agentId: string | null;
   personaId: string | null;
+  traceId?: string | null;
   eventType: string;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
   payload: Record<string, unknown>;

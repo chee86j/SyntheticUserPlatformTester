@@ -1,4 +1,5 @@
 import { env } from "./config.js";
+import { injectTraceHeaders } from "@synthetic/telemetry";
 
 type RequestOptions = {
   method?: "GET" | "POST";
@@ -44,12 +45,14 @@ export class RunnerApiClient {
   }
 
   private performRequest(path: string, options?: RequestOptions): Promise<Response> {
+    const headers = injectTraceHeaders({
+      "content-type": "application/json",
+      cookie: this.cookieHeader
+    });
+
     return fetch(`${env.API_BASE_URL}${path}`, {
       method: options?.method ?? "GET",
-      headers: {
-        "content-type": "application/json",
-        cookie: this.cookieHeader
-      },
+      headers,
       body: options?.body ? JSON.stringify(options.body) : undefined
     });
   }

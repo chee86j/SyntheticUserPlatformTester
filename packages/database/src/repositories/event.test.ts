@@ -10,6 +10,7 @@ test("toSimulationEventCreateData maps required fields for event creation", () =
     runId: "run-1",
     agentId: "agent-1",
     personaId: "persona-1",
+    traceId: "trace-123",
     eventType: "action.completed",
     severity: EventSeverity.WARNING,
     payload: { action: "submit_form" },
@@ -20,6 +21,7 @@ test("toSimulationEventCreateData maps required fields for event creation", () =
   assert.equal(data.runId, "run-1");
   assert.equal(data.agentId, "agent-1");
   assert.equal(data.personaId, "persona-1");
+  assert.equal(data.traceId, "trace-123");
   assert.equal(data.eventType, "action.completed");
   assert.equal(data.severity, EventSeverity.WARNING);
   assert.deepEqual(data.payload, { action: "submit_form" });

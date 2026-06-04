@@ -354,6 +354,7 @@ model SimulationEvent {
   runId           String
   agentId         String?
   personaId       String?
+  traceId         String?
   eventType       String
   severity        EventSeverity @default(INFO)
   payload         Json

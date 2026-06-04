@@ -54,6 +54,7 @@ export const simulationEventSchema = z
     runId: z.string().uuid(),
     agentId: z.string().uuid().optional(),
     personaId: z.string().uuid().optional(),
+    traceId: z.string().trim().regex(/^[0-9a-f]{32}$/i).optional(),
     eventType: simulationEventTypeSchema,
     severity: simulationEventSeveritySchema.default("INFO"),
     payload: z.record(z.string(), payloadValueSchema).default({}),
