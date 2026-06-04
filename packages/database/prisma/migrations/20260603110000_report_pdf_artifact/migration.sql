@@ -1,0 +1,1 @@
+ALTER TYPE "ArtifactType" ADD VALUE 'REPORT_PDF';

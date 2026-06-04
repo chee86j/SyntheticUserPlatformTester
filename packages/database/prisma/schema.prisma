@@ -73,6 +73,7 @@ enum ArtifactType {
   CONSOLE_LOG
   NETWORK_LOG
   REPORT
+  REPORT_PDF
 }
 
 enum FindingType {

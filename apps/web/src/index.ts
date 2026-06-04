@@ -95,7 +95,7 @@ type Artifact = {
   id: string;
   simulationRunId: string;
   simulationAgentId: string;
-  type: "SCREENSHOT" | "TRACE" | "VIDEO" | "CONSOLE_LOG" | "NETWORK_LOG" | "REPORT";
+  type: "SCREENSHOT" | "TRACE" | "VIDEO" | "CONSOLE_LOG" | "NETWORK_LOG" | "REPORT" | "REPORT_PDF";
   uri: string;
   createdAt: string;
 };

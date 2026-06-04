@@ -294,8 +294,12 @@ function DashboardApp({ config }) {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     : [];
 
-  const latestReport = artifacts
+  const latestMarkdownReport = artifacts
     .filter((artifact) => artifact.type === "REPORT")
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  const latestPdfReport = artifacts
+    .filter((artifact) => artifact.type === "REPORT_PDF")
     .slice()
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
@@ -308,30 +312,48 @@ function DashboardApp({ config }) {
   return React.createElement(
     "div",
     { className: "space-y-6" },
-    latestReport
+    latestMarkdownReport || latestPdfReport
       ? React.createElement(
           "div",
           { className: "flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" },
           React.createElement(
             "div",
             null,
-            React.createElement("p", { className: "text-sm font-semibold text-emerald-900" }, "Markdown report ready"),
-            React.createElement("p", { className: "text-xs text-emerald-800" }, "Open the generated report for the executive summary and artifact appendix.")
+            React.createElement("p", { className: "text-sm font-semibold text-emerald-900" }, latestPdfReport ? "Report exports ready" : "Markdown report ready"),
+            React.createElement("p", { className: "text-xs text-emerald-800" }, latestPdfReport ? "Download the PDF or open the markdown source report for the executive summary and artifact appendix." : "Open the generated report for the executive summary and artifact appendix.")
           ),
           React.createElement(
-            "a",
-            {
-              className: "rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white no-underline",
-              href: getArtifactHref(latestReport, config),
-              target: "_blank",
-              rel: "noreferrer"
-            },
-            "Open markdown report"
+            "div",
+            { className: "flex flex-wrap gap-2" },
+            latestPdfReport
+              ? React.createElement(
+                  "a",
+                  {
+                    className: "rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white no-underline",
+                    href: getArtifactHref(latestPdfReport, config),
+                    target: "_blank",
+                    rel: "noreferrer"
+                  },
+                  "Download PDF report"
+                )
+              : null,
+            latestMarkdownReport
+              ? React.createElement(
+                  "a",
+                  {
+                    className: "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-800 no-underline",
+                    href: getArtifactHref(latestMarkdownReport, config),
+                    target: "_blank",
+                    rel: "noreferrer"
+                  },
+                  "Open markdown report"
+                )
+              : null
           )
         )
       : React.createElement(EmptyState, {
           title: "Report pending",
-          body: "The markdown report will appear here after the run finishes and the report job completes."
+          body: "The markdown source report and PDF export will appear here after the run finishes and the report job completes."
         }),
     error
       ? React.createElement(

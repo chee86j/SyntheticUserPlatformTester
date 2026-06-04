@@ -9,5 +9,11 @@
                     "build":  "tsc -p tsconfig.json",
                     "test":  "tsx --test src/**/*.test.ts",
                     "typecheck":  "tsc --noEmit -p tsconfig.json"
-                }
+                },
+    "dependencies":  {
+                         "pdfkit":  "^0.17.2"
+                     },
+    "devDependencies":  {
+                            "@types/pdfkit":  "^0.17.3"
+                        }
 }

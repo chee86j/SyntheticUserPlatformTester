@@ -10,7 +10,7 @@ import {
   RunRepository
 } from '@synthetic/database';
 import { ArtifactType } from '@prisma/client';
-import { generateRunReportMarkdown } from '@synthetic/reports';
+import { generateRunReportMarkdown, generateRunReportPdf } from '@synthetic/reports';
 import { toStoredArtifactLocator } from "../lib/artifact-storage.js";
 import { getRunDirectory } from "../lib/paths.js";
 import { EventEmitterService } from "./event-emitter-service.js";
@@ -28,7 +28,7 @@ export class RunReportService {
     private readonly eventEmitter: EventEmitterService
   ) {}
 
-  async generate(runId: string): Promise<{ reportPath: string; artifactId: string }> {
+  async generate(runId: string): Promise<{ reportPath: string; pdfPath: string; artifactId: string; pdfArtifactId: string }> {
     const run = await this.runRepository.getExecutionById(runId);
     if (!run) {
       throw new Error(`Run ${runId} not found`);
@@ -55,6 +55,7 @@ export class RunReportService {
 
     const budgetTotals = await this.llmUsageRepository.getRunUsageTotals(run.id, run.organizationId);
     const reportPath = path.join(reportDirectory, "report.md");
+    const pdfPath = path.join(reportDirectory, "report.pdf");
     const markdown = generateRunReportMarkdown({
       generatedAt: new Date(),
       run: {
@@ -126,15 +127,24 @@ export class RunReportService {
         }
       }
     });
+    const pdf = await generateRunReportPdf(markdown);
 
     await writeFile(reportPath, markdown, "utf8");
+    await writeFile(pdfPath, pdf);
     const reportLocator = toStoredArtifactLocator(reportPath);
+    const pdfLocator = toStoredArtifactLocator(pdfPath);
 
     const artifact = await this.artifactRepository.create({
       simulationRunId: run.id,
       simulationAgentId: agents[0].id,
       type: ArtifactType.REPORT,
       uri: reportLocator
+    });
+    const pdfArtifact = await this.artifactRepository.create({
+      simulationRunId: run.id,
+      simulationAgentId: agents[0].id,
+      type: ArtifactType.REPORT_PDF,
+      uri: pdfLocator
     });
 
     await this.eventEmitter.emit({
@@ -143,8 +153,14 @@ export class RunReportService {
       eventType: "artifact.created",
       payload: { artifactId: artifact.id, type: "REPORT", uri: reportLocator }
     });
+    await this.eventEmitter.emit({
+      runId: run.id,
+      agentId: agents[0].id,
+      eventType: "artifact.created",
+      payload: { artifactId: pdfArtifact.id, type: "REPORT_PDF", uri: pdfLocator }
+    });
 
-    return { reportPath, artifactId: artifact.id };
+    return { reportPath, pdfPath, artifactId: artifact.id, pdfArtifactId: pdfArtifact.id };
   }
 }
 

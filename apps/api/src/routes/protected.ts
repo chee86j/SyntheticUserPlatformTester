@@ -1637,6 +1637,12 @@ protectedRouter.get("/runs/:runId/artifacts/:artifactId/content", async (req: Au
 
   if (artifact.type === "REPORT") {
     res.type("text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", 'inline; filename="report.md"');
+  }
+
+  if (artifact.type === "REPORT_PDF") {
+    res.type("application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="report.pdf"');
   }
 
   res.sendFile(resolvedPath);

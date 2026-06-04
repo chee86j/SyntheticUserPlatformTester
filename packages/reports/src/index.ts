@@ -1,3 +1,5 @@
+import PDFDocument from 'pdfkit';
+
 type ReportRun = {
   id: string;
   status: string;
@@ -284,6 +286,31 @@ export function generateRunReportMarkdown(input: GenerateRunReportInput): string
   ];
 
   return sections.join('\n').trimEnd() + '\n';
+}
+
+export async function generateRunReportPdf(markdown: string): Promise<Buffer> {
+  const doc = new PDFDocument({
+    autoFirstPage: false,
+    compress: false,
+    margin: 54,
+    info: {
+      Title: 'Synthetic User Validation Report',
+      Author: 'Synthetic User Validation Platform',
+      Subject: 'Simulation report export'
+    }
+  });
+
+  const buffers: Buffer[] = [];
+  doc.on('data', (chunk: Uint8Array) => buffers.push(Buffer.from(chunk)));
+
+  const completion = new Promise<Buffer>((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+  });
+
+  renderMarkdownAsPdf(doc, markdown);
+  doc.end();
+  return completion;
 }
 
 function buildExecutiveSummary(
@@ -673,4 +700,129 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function renderMarkdownAsPdf(doc: InstanceType<typeof PDFDocument>, markdown: string): void {
+  doc.addPage({ size: 'LETTER', margins: { top: 54, bottom: 54, left: 54, right: 54 } });
+  renderPdfHeader(doc);
+
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    if (!line.trim()) {
+      doc.moveDown(0.45);
+      continue;
+    }
+
+    if (/^# /.test(line)) {
+      ensurePdfSpace(doc, 34);
+      doc.font('Helvetica-Bold').fontSize(21).fillColor('#0f172a').text(line.slice(2).trim(), {
+        paragraphGap: 8
+      });
+      continue;
+    }
+
+    if (/^## /.test(line)) {
+      ensurePdfSpace(doc, 28);
+      doc.font('Helvetica-Bold').fontSize(15).fillColor('#111827').text(line.slice(3).trim(), {
+        paragraphGap: 5
+      });
+      continue;
+    }
+
+    if (/^### /.test(line)) {
+      ensurePdfSpace(doc, 24);
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#1f2937').text(line.slice(4).trim(), {
+        paragraphGap: 4
+      });
+      continue;
+    }
+
+    if (/^- /.test(line)) {
+      writePdfBullet(doc, line.slice(2).trim());
+      continue;
+    }
+
+    if (/^\|/.test(line)) {
+      writePdfTableRow(doc, line);
+      continue;
+    }
+
+    if (/^_.*_$/.test(line.trim())) {
+      ensurePdfSpace(doc, 20);
+      doc.font('Helvetica-Oblique').fontSize(10.5).fillColor('#4b5563').text(stripMarkdown(line.trim()), {
+        paragraphGap: 4
+      });
+      continue;
+    }
+
+    ensurePdfSpace(doc, 20);
+    doc.font('Helvetica').fontSize(10.5).fillColor('#111827').text(stripMarkdown(line), {
+      lineGap: 2,
+      paragraphGap: 3
+    });
+  }
+}
+
+function renderPdfHeader(doc: InstanceType<typeof PDFDocument>): void {
+  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(23).text('Synthetic User Validation Report');
+  doc.moveDown(0.2);
+  doc.fillColor('#475569').font('Helvetica').fontSize(10).text(
+    'Business summary generated from the redacted markdown report source of truth.',
+    { paragraphGap: 10 }
+  );
+  doc.save();
+  const y = doc.y;
+  doc.moveTo(doc.page.margins.left, y).lineTo(doc.page.width - doc.page.margins.right, y).strokeColor('#cbd5e1').lineWidth(1).stroke();
+  doc.restore();
+  doc.moveDown(0.9);
+}
+
+function ensurePdfSpace(doc: InstanceType<typeof PDFDocument>, neededHeight: number): void {
+  const bottomLimit = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + neededHeight <= bottomLimit) return;
+  doc.addPage({ size: 'LETTER', margins: { top: 54, bottom: 54, left: 54, right: 54 } });
+}
+
+function writePdfBullet(doc: InstanceType<typeof PDFDocument>, value: string): void {
+  ensurePdfSpace(doc, 18);
+  doc.font('Helvetica').fontSize(10.5).fillColor('#111827');
+  const startX = doc.x;
+  const startY = doc.y;
+  doc.text('\u2022', startX, startY, { continued: false });
+  doc.text(stripMarkdown(value), startX + 12, startY, {
+    width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 12,
+    lineGap: 2,
+    paragraphGap: 3
+  });
+}
+
+function writePdfTableRow(doc: InstanceType<typeof PDFDocument>, line: string): void {
+  const cells = line
+    .split('|')
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+  if (cells.length === 0) return;
+  if (cells.every((cell) => /^-+$/.test(cell))) return;
+
+  ensurePdfSpace(doc, 18);
+  doc.font('Helvetica').fontSize(9.5).fillColor('#1f2937').text(
+    cells.map((cell) => stripMarkdown(cell)).join('    |    '),
+    {
+      lineGap: 2,
+      paragraphGap: 2
+    }
+  );
+}
+
+function stripMarkdown(value: string): string {
+  return value
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\\\|/g, '|')
+    .replace(/^_+|_+$/g, '')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateRunReportMarkdown } from './index.js';
+import { generateRunReportMarkdown, generateRunReportPdf } from './index.js';
 
 test('generateRunReportMarkdown produces required sections and redacts sensitive values', () => {
   const markdown = generateRunReportMarkdown({
@@ -100,4 +100,32 @@ test('generateRunReportMarkdown produces required sections and redacts sensitive
   assert.doesNotMatch(markdown, /abc123xyz/);
   assert.match(markdown, /\[redacted\]/);
   assert.doesNotMatch(markdown, /\?token=/);
+});
+
+test('generateRunReportPdf renders a PDF from the markdown source of truth', async () => {
+  const markdown = [
+    '# Post-Run Report',
+    '',
+    '- Generated: 2026-06-03T12:00:00.000Z',
+    '- Status: Completed',
+    '',
+    '## 1. Executive Summary',
+    '',
+    '- No secrets should appear here: password=[redacted], bearer [redacted]',
+    '',
+    '## 2. Artifacts',
+    '',
+    '| Type | URI |',
+    '| --- | --- |',
+    '| REPORT | runs/example/report.md |'
+  ].join('\n');
+
+  const pdf = await generateRunReportPdf(markdown);
+
+  assert.ok(pdf.length > 500);
+  assert.equal(pdf.subarray(0, 4).toString('utf8'), '%PDF');
+  const pdfText = pdf.toString('latin1');
+  assert.match(pdfText, /Synthetic User Validation Report/);
+  assert.doesNotMatch(pdfText, /SuperSecret!/);
+  assert.doesNotMatch(pdfText, /Bearer abc123xyz/);
 });
