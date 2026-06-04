@@ -7,63 +7,7 @@ and did, and turns the resulting event stream into reports, artifacts, and calib
 
 ## Application Workflow
 
-```text
-Operator
-  |
-  | login, configure project/environment/workflow/personas/accounts
-  v
-apps/web dashboard
-  |
-  | HTTP + cookie auth
-  v
-apps/api
-  |
-  | validates run setup:
-  | - project + environment baseUrl
-  | - allowedDomains
-  | - ACTIVE workflow
-  | - selected personas
-  | - available test accounts
-  | - budget policy
-  v
-PostgreSQL <------------------------------+
-  |                                       |
-  | stores orgs, users, personas,         |
-  | workflows, accounts, runs, agents,    |
-  | events, artifacts, LLM usage, budgets |
-  |                                       |
-  +--> Redis / BullMQ queues              |
-       |                                  |
-       | simulation-runs                  |
-       v                                  |
-apps/runner worker                        |
-  |                                  writes events/artifacts
-  | creates SimulationAgent rows           |
-  | one per selected account/persona       |
-  v                                       |
-agent-jobs queue                           |
-  |                                       |
-  | MAX_PARALLEL_AGENTS controls           |
-  | concurrent browser agents              |
-  v                                       |
-Playwright browser agent                   |
-  |                                       |
-  | scripted mode: generated login/actions |
-  | LLM mode: observe page -> prompt LLM   |
-  |           -> parse JSON action         |
-  |           -> execute safe action       |
-  |           -> repeat until success      |
-  v                                       |
-Connected web application                  |
-  |                                       |
-  | console/network/action events          |
-  | screenshots, video, traces             |
-  v                                       |
-report-jobs queue                          |
-  |                                       |
-  v                                       |
-Markdown/PDF report + dashboard views <---+
-```
+![Synthetic test workflow diagram](docs/assets/mermaid-diagram.png)
 
 The runner enforces network scope before interacting with the target app. It permits the environment
 `baseUrl` host plus `allowedDomains`, and blocks everything else through Playwright request routing.
