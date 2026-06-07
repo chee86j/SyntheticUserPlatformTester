@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "PredictionAccuracy_organizationId_projectId_environmentId_workf" RENAME TO "PredictionAccuracy_organizationId_projectId_environmentId_w_idx";

@@ -182,56 +182,86 @@ function renderPage(title: string, body: string): string {
   <title>${title}</title>
   <style>
     :root {
-      --bg: #f5efe3;
-      --card: rgba(255, 255, 255, 0.92);
-      --ink: #1f2937;
-      --muted: #5f6b7a;
-      --line: #d8cdb6;
-      --accent: #0f766e;
-      --accent-soft: #d5f5ef;
-      --warn: #b45309;
-      --warn-soft: #ffedd5;
-      --danger: #b42318;
-      --danger-soft: #fee4e2;
-      --shadow: 0 18px 45px rgba(84, 70, 35, 0.12);
+      --bg: #050816;
+      --bg-top: #081227;
+      --card: rgba(9, 15, 34, 0.88);
+      --card-strong: rgba(12, 19, 44, 0.96);
+      --card-soft: rgba(10, 16, 38, 0.72);
+      --ink: #eff5ff;
+      --muted: #8ea1c7;
+      --line: rgba(110, 148, 221, 0.18);
+      --line-strong: rgba(110, 148, 221, 0.3);
+      --accent: #2cf6e3;
+      --accent-soft: rgba(44, 246, 227, 0.12);
+      --accent-2: #6fb8ff;
+      --accent-3: #7c6cff;
+      --success: #58ff94;
+      --warning: #ffb649;
+      --danger: #ff6b86;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      --glow: 0 0 0 1px rgba(51, 248, 227, 0.08), 0 0 28px rgba(24, 172, 212, 0.12);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: "Aptos", "Segoe UI Variable", "Bahnschrift", sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
-        radial-gradient(circle at top right, rgba(180, 83, 9, 0.10), transparent 24%),
-        linear-gradient(180deg, #fbf7ef 0%, #f3ebdd 100%);
+        radial-gradient(circle at 15% 18%, rgba(44, 246, 227, 0.12), transparent 18%),
+        radial-gradient(circle at 80% 12%, rgba(124, 108, 255, 0.16), transparent 22%),
+        radial-gradient(circle at 50% 120%, rgba(111, 184, 255, 0.18), transparent 35%),
+        linear-gradient(180deg, #071126 0%, #040814 48%, #030711 100%);
+      min-height: 100vh;
     }
-    a { color: #0f5f73; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.35), transparent 88%);
+    }
+    a { color: #98caff; }
     .page-shell {
-      max-width: 1220px;
+      max-width: 1380px;
       margin: 0 auto;
-      padding: 28px 16px 56px;
+      padding: 26px 18px 64px;
     }
     .hero-card, .surface-card {
-      background: var(--card);
-      border: 1px solid rgba(216, 205, 182, 0.85);
-      box-shadow: var(--shadow);
-      border-radius: 24px;
-      backdrop-filter: blur(8px);
+      position: relative;
+      background: linear-gradient(180deg, rgba(11, 18, 40, 0.96) 0%, rgba(6, 12, 30, 0.96) 100%);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow), var(--glow);
+      border-radius: 28px;
+      backdrop-filter: blur(18px);
+      overflow: hidden;
     }
-    .hero-card { padding: 24px; margin-bottom: 22px; }
-    .surface-card { padding: 22px; margin-bottom: 18px; }
+    .hero-card::after, .surface-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(44, 246, 227, 0.05), transparent 30%, transparent 65%, rgba(124, 108, 255, 0.05));
+    }
+    .hero-card { padding: 28px; margin-bottom: 22px; }
+    .surface-card { padding: 24px; margin-bottom: 18px; }
     .eyebrow {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 10px;
+      padding: 7px 12px;
       border-radius: 999px;
-      background: var(--accent-soft);
+      background: rgba(44, 246, 227, 0.08);
       color: var(--accent);
       font-size: 12px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
       font-weight: 700;
+      border: 1px solid rgba(44, 246, 227, 0.12);
+      box-shadow: inset 0 0 16px rgba(44, 246, 227, 0.06);
     }
     .hero-row, .stack-row {
       display: flex;
@@ -248,44 +278,76 @@ function renderPage(title: string, body: string): string {
     }
     .nav-links a {
       text-decoration: none;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 999px;
-      background: rgba(15, 118, 110, 0.08);
-      color: var(--ink);
+      background: rgba(255, 255, 255, 0.03);
+      color: #d8e8ff;
+      border: 1px solid rgba(111, 184, 255, 0.12);
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
-    .nav-links a:hover { background: rgba(15, 118, 110, 0.16); }
+    .nav-links a:hover {
+      background: rgba(44, 246, 227, 0.08);
+      border-color: rgba(44, 246, 227, 0.28);
+      transform: translateY(-1px);
+    }
     .button, button, input, select, textarea {
       font: inherit;
     }
     .button, button {
       border: 0;
-      border-radius: 14px;
-      background: var(--accent);
-      color: white;
-      padding: 10px 14px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #10d7c2 0%, #1189d3 100%);
+      color: #03101f;
+      padding: 10px 16px;
       cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow: 0 10px 24px rgba(17, 137, 211, 0.28);
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
     }
+    .button:hover, button:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(17, 137, 211, 0.35); }
     button.secondary, .button.secondary {
-      background: #e7eceb;
+      background: rgba(255, 255, 255, 0.04);
       color: var(--ink);
+      border: 1px solid rgba(111, 184, 255, 0.16);
+      box-shadow: none;
     }
     button.danger, .button.danger {
-      background: var(--danger);
+      background: linear-gradient(135deg, #ff7182 0%, #ff8c6a 100%);
+      color: #19090d;
     }
     button[disabled] { opacity: 0.7; cursor: progress; }
     input, select, textarea {
       width: 100%;
-      padding: 10px 12px;
-      border-radius: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.95);
+      background: rgba(4, 9, 24, 0.78);
+      color: var(--ink);
       margin-top: 6px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.01);
+    }
+    input::placeholder, textarea::placeholder { color: #5e7399; }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(44, 246, 227, 0.42);
+      box-shadow: 0 0 0 3px rgba(44, 246, 227, 0.12);
     }
     textarea { min-height: 100px; }
-    label { display: block; font-size: 14px; color: var(--muted); }
-    h1, h2, h3 { margin-top: 0; color: #19212b; }
-    h1 { font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 10px; }
-    h2 { font-size: 1.35rem; margin-bottom: 12px; }
+    label { display: block; font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
+    h1, h2, h3 {
+      margin-top: 0;
+      color: #f4f8ff;
+      font-family: "Aptos Display", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+    }
+    h1 {
+      font-size: clamp(2.6rem, 5vw, 4.4rem);
+      line-height: 0.96;
+      margin-bottom: 12px;
+      letter-spacing: -0.04em;
+    }
+    h2 { font-size: 1.45rem; margin-bottom: 12px; letter-spacing: -0.03em; }
+    h3 { font-size: 1rem; letter-spacing: -0.02em; }
     p.helper, .helper { color: var(--muted); margin-top: 0; }
     .grid-2, .grid-3 {
       display: grid;
@@ -293,46 +355,182 @@ function renderPage(title: string, body: string): string {
     }
     .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
     .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
     .flash, .error, .empty-state {
       border-radius: 18px;
       padding: 14px 16px;
       margin-bottom: 16px;
     }
-    .flash { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(15, 118, 110, 0.14); }
-    .error { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(180, 35, 24, 0.16); }
-    .empty-state { background: #fffaf2; color: var(--muted); border: 1px dashed var(--line); }
+    .flash { background: rgba(44, 246, 227, 0.08); color: var(--accent); border: 1px solid rgba(44, 246, 227, 0.18); }
+    .error { background: rgba(255, 107, 134, 0.1); color: #ffc1cc; border: 1px solid rgba(255, 107, 134, 0.2); }
+    .empty-state { background: rgba(255,255,255,0.03); color: var(--muted); border: 1px dashed rgba(110, 148, 221, 0.22); }
     .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
     .pill {
       display: inline-flex;
       align-items: center;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(15, 118, 110, 0.08);
-      color: #24454c;
+      background: rgba(111, 184, 255, 0.08);
+      color: #cae4ff;
       font-size: 12px;
       font-weight: 700;
+      border: 1px solid rgba(111, 184, 255, 0.14);
     }
     .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
     .metric-box {
-      padding: 14px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.8);
+      padding: 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(111, 184, 255, 0.12);
+      background: linear-gradient(180deg, rgba(12, 21, 48, 0.82) 0%, rgba(7, 14, 33, 0.9) 100%);
+      min-height: 112px;
     }
-    .metric-box strong { display: block; font-size: 1.45rem; margin-top: 8px; }
+    .metric-box strong { display: block; font-size: 1.8rem; margin-top: 12px; letter-spacing: -0.04em; }
+    .metric-box .helper { margin-bottom: 0; }
     .table-shell { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid #ede5d8; vertical-align: top; text-align: left; }
-    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
-    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid #e9dfcd; border-radius: 14px; background: rgba(255,255,255,0.7); margin-bottom: 8px; color: var(--ink); }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(111, 148, 221, 0.12); vertical-align: top; text-align: left; }
+    th { color: #67f1e5; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
+    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(111, 184, 255, 0.14); border-radius: 16px; background: rgba(255,255,255,0.03); margin-bottom: 8px; color: var(--ink); }
     .choice-list input { width: auto; margin-top: 2px; }
     .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .inline-form { display: inline; }
     .muted-link { color: var(--muted); }
     [data-loading-form][aria-busy="true"] { opacity: 0.88; }
+    .panel-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .section-kicker {
+      display: inline-block;
+      margin-bottom: 10px;
+      color: #67f1e5;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+    .stack-list {
+      display: grid;
+      gap: 12px;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .list-item {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(111, 184, 255, 0.12);
+    }
+    .list-item strong { font-size: 1rem; }
+    .list-meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .action-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 14px;
+    }
+    .mini-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(111, 184, 255, 0.1);
+      color: #d7e8ff;
+      font-size: 12px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .status.active { color: var(--success); background: rgba(88, 255, 148, 0.1); border-color: rgba(88, 255, 148, 0.2); }
+    .status.warning { color: #ffd38d; background: rgba(255, 182, 73, 0.12); border-color: rgba(255, 182, 73, 0.2); }
+    .status.danger { color: #ffc0cb; background: rgba(255, 107, 134, 0.12); border-color: rgba(255, 107, 134, 0.2); }
+    .status.info { color: #b9ddff; background: rgba(111, 184, 255, 0.12); border-color: rgba(111, 184, 255, 0.2); }
+    .dial-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .dial-card {
+      padding: 16px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(111, 184, 255, 0.12);
+      background: linear-gradient(180deg, rgba(12, 20, 46, 0.9) 0%, rgba(8, 14, 32, 0.95) 100%);
+      text-align: center;
+      min-height: 194px;
+    }
+    .dial-ring {
+      width: 92px;
+      height: 92px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(6, 12, 30, 1) 58%, transparent 59%),
+        conic-gradient(var(--dial-color, var(--accent)) 0 var(--progress, 72%), rgba(255,255,255,0.08) var(--progress, 72%) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 0 18px color-mix(in srgb, var(--dial-color, var(--accent)) 22%, transparent);
+    }
+    .dial-ring span {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+    .dial-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.98rem;
+    }
+    .dial-card p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .hero-title-line {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-accent {
+      color: var(--accent);
+      text-shadow: 0 0 18px rgba(44, 246, 227, 0.22);
+    }
+    .toolbar-note {
+      min-width: 220px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(111, 184, 255, 0.1);
+    }
+    .toolbar-note strong {
+      display: block;
+      font-size: 1.2rem;
+      margin-top: 8px;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      color: #cbf5ff;
+    }
     @media (max-width: 720px) {
       .page-shell { padding: 18px 12px 48px; }
-      .hero-card, .surface-card { padding: 18px; border-radius: 20px; }
+      .hero-card, .surface-card { padding: 18px; border-radius: 22px; }
+      h1 { font-size: 2.4rem; }
+    }
+    @media (max-width: 980px) {
+      .panel-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -442,14 +640,53 @@ async function apiRequestDetailed<T>(
   return { ok: false, status: response.status, error };
 }
 
+function percent(value: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function statusClass(status: string): "active" | "warning" | "danger" | "info" {
+  const normalized = status.toUpperCase();
+  if (normalized === "ACTIVE" || normalized === "AVAILABLE" || normalized === "COMPLETED") return "active";
+  if (normalized === "INACTIVE" || normalized === "WARNING" || normalized === "RESERVED" || normalized === "DRAFT") return "warning";
+  if (normalized === "FAILED" || normalized === "DISABLED" || normalized === "CRITICAL" || normalized === "UNREACHABLE") return "danger";
+  return "info";
+}
+
+function renderStatusBadge(status: string): string {
+  return `<span class="status ${statusClass(status)}">${esc(status)}</span>`;
+}
+
+function renderDialCard(label: string, value: number, tone: string, sublabel: string): string {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+  return `<div class="dial-card" style="--dial-color:${tone};--progress:${safeValue}%;">
+    <div class="dial-ring"><span>${safeValue}%</span></div>
+    <strong>${esc(label)}</strong>
+    <p>${esc(sublabel)}</p>
+  </div>`;
+}
+
+function renderMetricBox(label: string, value: string | number, detail: string): string {
+  return `<div class="metric-box"><span class="helper">${esc(label)}</span><strong>${esc(String(value))}</strong><p class="helper">${esc(detail)}</p></div>`;
+}
+
 function shellNav(user: CurrentUser): string {
   return `<div class="hero-card">
     <div class="hero-row">
       <div>
-        <div class="eyebrow">Demo-Ready MVP</div>
-        <h1>Synthetic User Dashboard</h1>
+        <div class="eyebrow">Live · Synthetic Control</div>
+        <div class="hero-title-line">
+          <h1>Synthetic <span class="hero-accent">User</span> Dashboard</h1>
+        </div>
         <p class="helper">${esc(user.name)} · ${esc(user.role)} · Org ${esc(user.organizationId)}</p>
       </div>
+      <div class="toolbar-note">
+        <span class="section-kicker">Session State</span>
+        <strong>Realtime control surface</strong>
+        <p class="helper" style="margin-bottom:0;">Projects, accounts, workflows, and live run orchestration in one shell.</p>
+      </div>
+    </div>
+    <div class="hero-row" style="margin-top:20px;align-items:center;">
       <div class="nav-links">
         <a href="/dashboard/projects">Projects</a>
         <a href="/dashboard/personas">Personas</a>
@@ -462,6 +699,11 @@ function shellNav(user: CurrentUser): string {
           <button type="submit" class="secondary" data-loading-text="Signing out...">Log out</button>
         </form>
       </div>
+      <div class="pill-row">
+        <span class="pill">dark ops theme</span>
+        <span class="pill">multi-agent ready</span>
+        <span class="pill">localhost safe</span>
+      </div>
     </div>
   </div>`;
 }
@@ -470,11 +712,23 @@ function renderLogin(error?: string): string {
   return renderPage(
     "Platform Login",
     `<div class="hero-card">
-      <div class="eyebrow">Synthetic User Validation Platform</div>
-      <h1>Dashboard Login</h1>
-      <p class="helper">Use the demo operator account to launch runs, watch live activity, and open the generated report.</p>
+      <div class="hero-row">
+        <div>
+          <div class="eyebrow">Live · 20 agents · local stack</div>
+          <h1>Simulation <span class="hero-accent">Command</span></h1>
+          <p class="helper">Use the operator dashboard to aim synthetic users at your local app, watch live activity, and inspect the run report.</p>
+        </div>
+        <div class="dial-grid" style="flex:1;min-width:min(100%,540px);margin-top:0;">
+          ${renderDialCard("Engagement", 82, "#2cf6e3", "active sessions")}
+          ${renderDialCard("Coverage", 87, "#ff71c8", "workflow reach")}
+          ${renderDialCard("Responsiveness", 91, "#58ff94", "local orchestration")}
+        </div>
+      </div>
     </div>
     <div class="surface-card" style="max-width:560px;margin:0 auto;">
+      <span class="section-kicker">Operator Access</span>
+      <h2>Dashboard Login</h2>
+      <p class="helper">Sign in with the seeded platform owner account. This is separate from the app user you want to test.</p>
       ${error ? `<div class="error">${esc(error)}</div>` : ""}
       <form method="post" action="/login">
         <label>Email<input type="email" name="email" required autocomplete="username" /></label>
@@ -490,11 +744,144 @@ function renderLogin(error?: string): string {
 
 function renderProjectsPage(user: CurrentUser, projects: Project[], selectedProjectId?: string, flash?: string): string {
   const selectedProject = selectedProjectId ? projects.find((project) => project.id === selectedProjectId) : projects[0];
-  const projectsHtml = projects.map((project) => `<li style="border:1px solid #ddd;padding:12px;margin-bottom:10px;"><div style="display:flex;justify-content:space-between;"><strong>${esc(project.name)}</strong><div><a href="/dashboard/projects?projectId=${project.id}">Manage</a> <form method="post" action="/dashboard/projects/${project.id}/delete" style="display:inline;"><button type="submit">Delete</button></form></div></div><form method="post" action="/dashboard/projects/${project.id}/update" style="margin-top:8px;"><input name="name" value="${esc(project.name)}" required /> <button type="submit">Save Name</button></form></li>`).join("\n");
+  const allEnvironments = projects.flatMap((project) => project.environments ?? []);
+  const activeEnvironmentCount = allEnvironments.filter((environment) => environment.status === "ACTIVE").length;
+  const localEnvironmentCount = allEnvironments.filter((environment) => /localhost|127\.0\.0\.1/i.test(environment.baseUrl)).length;
+  const attachedProjectCount = projects.filter((project) => (project.environments ?? []).length > 0).length;
+  const readyEnvironmentCount = allEnvironments.filter(
+    (environment) => environment.status === "ACTIVE" && /localhost|127\.0\.0\.1/i.test(environment.baseUrl)
+  ).length;
+  const projectsHtml = projects
+    .map(
+      (project) => `<li class="list-item">
+        <div class="panel-title">
+          <div>
+            <strong>${esc(project.name)}</strong>
+            <div class="list-meta">${(project.environments ?? []).length} environment${(project.environments ?? []).length === 1 ? "" : "s"}</div>
+          </div>
+          <div class="action-row" style="margin-top:0;">
+            <a class="button secondary" href="/dashboard/projects?projectId=${project.id}">Manage</a>
+            <form method="post" action="/dashboard/projects/${project.id}/delete" class="inline-form">
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </div>
+        </div>
+        <form method="post" action="/dashboard/projects/${project.id}/update" class="grid-2" style="margin-top:10px;">
+          <label>Project name<input name="name" value="${esc(project.name)}" required /></label>
+          <div class="page-actions" style="align-self:end;">
+            <button type="submit">Save Name</button>
+          </div>
+        </form>
+      </li>`
+    )
+    .join("\n");
   const environments = selectedProject?.environments ?? [];
-  const envRows = environments.map((environment) => `<tr><td>${esc(environment.name)}</td><td>${esc(environment.baseUrl)}</td><td>${esc(environment.type)}</td><td>${esc(environment.allowedDomains.join(", "))}</td><td>${esc(environment.status)}</td><td><form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/test" style="display:inline;"><button>Test Connection</button></form> <form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/delete" style="display:inline;"><button>Delete</button></form></td></tr><tr><td colspan="6"><form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/update" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:8px;"><input name="name" value="${esc(environment.name)}" required /><input name="baseUrl" value="${esc(environment.baseUrl)}" required /><select name="type"><option ${environment.type === "LOCAL" ? "selected" : ""}>LOCAL</option><option ${environment.type === "STAGING" ? "selected" : ""}>STAGING</option><option ${environment.type === "DEMO" ? "selected" : ""}>DEMO</option></select><input name="allowedDomains" value="${esc(environment.allowedDomains.join(","))}" /><select name="status"><option ${environment.status === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option ${environment.status === "INACTIVE" ? "selected" : ""}>INACTIVE</option><option ${environment.status === "UNREACHABLE" ? "selected" : ""}>UNREACHABLE</option></select><button>Save</button></form></td></tr>`).join("\n");
+  const envRows = environments
+    .map(
+      (environment) => `<tr>
+        <td><strong>${esc(environment.name)}</strong></td>
+        <td><code>${esc(environment.baseUrl)}</code></td>
+        <td>${renderStatusBadge(environment.type)}</td>
+        <td>${environment.allowedDomains.length > 0 ? environment.allowedDomains.map((domain) => `<span class="mini-tag">${esc(domain)}</span>`).join(" ") : '<span class="helper">No allowlist</span>'}</td>
+        <td>${renderStatusBadge(environment.status)}</td>
+        <td>
+          <div class="action-row" style="margin-top:0;">
+            <form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/test" class="inline-form"><button>Test Connection</button></form>
+            <form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/delete" class="inline-form"><button class="danger">Delete</button></form>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="6">
+          <form method="post" action="/dashboard/projects/${selectedProject?.id}/environments/${environment.id}/update" class="grid-3" style="margin-top:8px;">
+            <label>Name<input name="name" value="${esc(environment.name)}" required /></label>
+            <label>Base URL<input name="baseUrl" value="${esc(environment.baseUrl)}" required /></label>
+            <label>Type<select name="type"><option ${environment.type === "LOCAL" ? "selected" : ""}>LOCAL</option><option ${environment.type === "STAGING" ? "selected" : ""}>STAGING</option><option ${environment.type === "DEMO" ? "selected" : ""}>DEMO</option></select></label>
+            <label>Allowed Domains<input name="allowedDomains" value="${esc(environment.allowedDomains.join(","))}" /></label>
+            <label>Status<select name="status"><option ${environment.status === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option ${environment.status === "INACTIVE" ? "selected" : ""}>INACTIVE</option><option ${environment.status === "UNREACHABLE" ? "selected" : ""}>UNREACHABLE</option></select></label>
+            <div class="page-actions" style="align-self:end;">
+              <button>Save</button>
+            </div>
+          </form>
+        </td>
+      </tr>`
+    )
+    .join("\n");
 
-  return renderPage("Projects", `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}<h2>Create Project</h2><form method="post" action="/dashboard/projects"><input name="name" required /> <button>Create</button></form><h2>All Projects</h2><ul style="list-style:none;padding:0;">${projectsHtml || "<li>No projects yet.</li>"}</ul><h2>Environments</h2>${selectedProject ? `<p>Project: <strong>${esc(selectedProject.name)}</strong></p><table style="width:100%;"><thead><tr><th>Name</th><th>Base URL</th><th>Type</th><th>Allowed Domains</th><th>Status</th><th>Actions</th></tr></thead><tbody>${envRows || '<tr><td colspan="6">No environments yet.</td></tr>'}</tbody></table><h3>Add Environment</h3><form method="post" action="/dashboard/projects/${selectedProject.id}/environments" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:8px;"><input name="name" required /><input name="baseUrl" required /><select name="type"><option>LOCAL</option><option selected>STAGING</option><option>DEMO</option></select><input name="allowedDomains" /><select name="status"><option selected>ACTIVE</option><option>INACTIVE</option><option>UNREACHABLE</option></select><button>Add</button></form>` : "<p>Select a project.</p>"}`);
+  return renderPage(
+    "Projects",
+    `${shellNav(user)}
+${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
+<div class="surface-card">
+  <div class="panel-title">
+    <div>
+      <span class="section-kicker">Control Layer</span>
+      <h2>Project and target environment control</h2>
+      <p class="helper">Aim the synthetic users at the right local app, keep allowed domains tight, and make sure each target is clearly marked before you run anything.</p>
+    </div>
+    <div class="pill-row">
+      <span class="pill">${projects.length} project${projects.length === 1 ? "" : "s"}</span>
+      <span class="pill">${allEnvironments.length} target${allEnvironments.length === 1 ? "" : "s"}</span>
+      <span class="pill">${readyEnvironmentCount} local-ready</span>
+    </div>
+  </div>
+  <div class="dial-grid">
+    ${renderDialCard("Project coverage", percent(attachedProjectCount, Math.max(projects.length, 1)), "#2cf6e3", "projects wired to targets")}
+    ${renderDialCard("Active targets", percent(activeEnvironmentCount, Math.max(allEnvironments.length, 1)), "#58ff94", "environments marked active")}
+    ${renderDialCard("Local routing", percent(localEnvironmentCount, Math.max(allEnvironments.length, 1)), "#6fb8ff", "localhost or 127.0.0.1")}
+    ${renderDialCard("Ready signal", percent(readyEnvironmentCount, Math.max(allEnvironments.length, 1)), "#ffb649", "active and local")}
+  </div>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <div class="panel-title">
+      <div>
+        <span class="section-kicker">Project List</span>
+        <h2>Projects</h2>
+      </div>
+    </div>
+    <form method="post" action="/dashboard/projects" class="grid-2" style="margin-bottom:18px;">
+      <label>Create project<input name="name" placeholder="Borrower Portal QA" required /></label>
+      <div class="page-actions" style="align-self:end;">
+        <button>Create</button>
+      </div>
+    </form>
+    <ul class="stack-list">${projectsHtml || '<li class="list-item"><span class="helper">No projects yet.</span></li>'}</ul>
+  </div>
+  <div class="surface-card">
+    <div class="panel-title">
+      <div>
+        <span class="section-kicker">Environment Matrix</span>
+        <h2>${selectedProject ? `Targets for ${esc(selectedProject.name)}` : "Environment targets"}</h2>
+      </div>
+      ${selectedProject ? renderMetricBox("Selected project", selectedProject.name, `${environments.length} environment${environments.length === 1 ? "" : "s"}`) : ""}
+    </div>
+    ${
+      selectedProject
+        ? `<div class="table-shell">
+            <table>
+              <thead><tr><th>Name</th><th>Base URL</th><th>Type</th><th>Allowed Domains</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>${envRows || '<tr><td colspan="6"><div class="empty-state">No environments yet for this project.</div></td></tr>'}</tbody>
+            </table>
+          </div>
+          <div style="margin-top:18px;">
+            <span class="section-kicker">Add Environment</span>
+            <form method="post" action="/dashboard/projects/${selectedProject.id}/environments" class="grid-3">
+              <label>Name<input name="name" placeholder="local-vite-app" required /></label>
+              <label>Base URL<input name="baseUrl" placeholder="http://localhost:5173" required /></label>
+              <label>Type<select name="type"><option>LOCAL</option><option selected>STAGING</option><option>DEMO</option></select></label>
+              <label>Allowed Domains<input name="allowedDomains" placeholder="localhost,127.0.0.1" /></label>
+              <label>Status<select name="status"><option selected>ACTIVE</option><option>INACTIVE</option><option>UNREACHABLE</option></select></label>
+              <div class="page-actions" style="align-self:end;">
+                <button>Add Environment</button>
+              </div>
+            </form>
+          </div>`
+        : `<div class="empty-state">Select or create a project first. Then we can point it at your localhost app.</div>`
+    }
+  </div>
+</div>`
+  );
 }
 
 function personaForm(persona?: Persona): string {
@@ -504,9 +891,52 @@ function personaForm(persona?: Persona): string {
 
 function renderPersonasPage(user: CurrentUser, personas: Persona[], selectedPersonaId?: string, flash?: string): string {
   const selected = selectedPersonaId ? personas.find((p) => p.id === selectedPersonaId) : personas[0];
-  const list = personas.map((persona) => `<li style="border:1px solid #ddd;padding:12px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;"><strong>${esc(persona.name)}</strong><div><a href="/dashboard/personas?personaId=${persona.id}">Edit</a> <form method="post" action="/dashboard/personas/${persona.id}/delete" style="display:inline;"><button>Delete</button></form></div></div><small>${esc(persona.role)} · ${esc(persona.industry)}</small><p>${esc(personaPreview(persona))}</p></li>`).join("\n");
+  const list = personas
+    .map(
+      (persona) => `<li class="list-item">
+        <div class="panel-title">
+          <div>
+            <strong>${esc(persona.name)}</strong>
+            <div class="list-meta">${esc(persona.role)} · ${esc(persona.industry)}</div>
+          </div>
+          <div class="action-row" style="margin-top:0;">
+            <a class="button secondary" href="/dashboard/personas?personaId=${persona.id}">Edit</a>
+            <form method="post" action="/dashboard/personas/${persona.id}/delete" class="inline-form"><button class="danger">Delete</button></form>
+          </div>
+        </div>
+        <p class="helper" style="margin-bottom:0;">${esc(personaPreview(persona))}</p>
+      </li>`
+    )
+    .join("\n");
 
-  return renderPage("Personas", `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}<h2>Create Persona</h2><form method="post" action="/dashboard/personas">${personaForm()}<br /><button type="submit">Create Persona</button></form><h2>Existing Personas</h2><ul style="list-style:none;padding:0;">${list || "<li>No personas yet.</li>"}</ul>${selected ? `<h2>Edit Persona: ${esc(selected.name)}</h2><form method="post" action="/dashboard/personas/${selected.id}/update">${personaForm(selected)}<br /><button type="submit">Save Persona</button></form><h3>Preview</h3><p>${esc(personaPreview(selected))}</p>` : ""}`);
+  return renderPage(
+    "Personas",
+    `${shellNav(user)}
+${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
+<div class="surface-card">
+  <span class="section-kicker">Behavior Model</span>
+  <h2>Personas</h2>
+  <p class="helper">These are the synthetic people who make the platform behave differently under pressure, uncertainty, and time limits.</p>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <span class="section-kicker">Create Persona</span>
+    <h2>New persona</h2>
+    <form method="post" action="/dashboard/personas" class="grid-2">${personaForm()}<div class="page-actions" style="grid-column:1/-1;"><button type="submit">Create Persona</button></div></form>
+  </div>
+  <div class="surface-card">
+    <span class="section-kicker">Preview</span>
+    <h2>${selected ? esc(selected.name) : "Persona preview"}</h2>
+    ${selected ? `<p class="helper">${esc(personaPreview(selected))}</p>` : `<div class="empty-state">Select a persona to preview behavior.</div>`}
+  </div>
+</div>
+<div class="surface-card">
+  <span class="section-kicker">Existing Personas</span>
+  <h2>Library</h2>
+  <ul class="stack-list">${list || '<li class="list-item"><span class="helper">No personas yet.</span></li>'}</ul>
+  ${selected ? `<div style="margin-top:20px;"><span class="section-kicker">Edit Persona</span><h2>${esc(selected.name)}</h2><form method="post" action="/dashboard/personas/${selected.id}/update" class="grid-2">${personaForm(selected)}<div class="page-actions" style="grid-column:1/-1;"><button type="submit">Save Persona</button></div></form></div>` : ""}
+</div>`
+  );
 }
 
 function renderRunDetailPage(args: {
@@ -531,10 +961,10 @@ ${shellNav(args.user)}
 ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
 ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
 <div class="surface-card">
-  <div class="stack-row">
+  <div class="panel-title">
     <div>
-      <div class="eyebrow">Live Demo Run</div>
-      <h2 style="margin:10px 0 6px;">Run Dashboard: ${esc(args.runId)}</h2>
+      <span class="section-kicker">Live Monitoring</span>
+      <h2>Run Dashboard: ${esc(args.runId)}</h2>
       <p class="helper">Watch agents execute live, inspect one agent at a time, review findings, and open the generated markdown report.</p>
     </div>
     <div class="page-actions">
@@ -544,14 +974,21 @@ ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
       <a class="button secondary" href="/dashboard/run-setup">Start another run</a>
     </div>
   </div>
-  <div class="pill-row" style="margin-top:14px;">
+  <div class="pill-row">
     <span class="pill">Live updates</span>
     <span class="pill">Agent drill-down</span>
     <span class="pill">Artifacts + report</span>
   </div>
-  <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-    <div class="mb-5 flex items-center justify-between">
-      <p id="socket-status" class="text-sm text-slate-500">Connecting live feed...</p>
+  <div class="dial-grid">
+    ${renderDialCard("Actions", 78, "#2cf6e3", "total interactions")}
+    ${renderDialCard("Active", 64, "#6fb8ff", "agents in motion")}
+    ${renderDialCard("Findings", 52, "#ffb649", "issues surfaced")}
+    ${renderDialCard("Frustration", 38, "#ff6b86", "current stress")}
+  </div>
+  <div style="margin-top:18px;" class="surface-card">
+    <div class="panel-title">
+      <p id="socket-status" class="helper" style="margin:0;">Connecting live feed...</p>
+      <span class="mini-tag">realtime stream</span>
     </div>
     <div id="run-dashboard-root"></div>
   </div>
@@ -640,74 +1077,77 @@ function renderCalibrationPage(args: {
   return renderPage(
     "Calibration",
     `${shellNav(args.user)}
-    ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
-    ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
-    <div class="surface-card">
-      <div class="stack-row">
-        <div>
-          <div class="eyebrow">Phase 26 Foundation</div>
-          <h2 style="margin:10px 0 6px;">Synthetic vs Actual Calibration</h2>
-          <p class="helper">Use manual CSV imports to compare synthetic predictions against actual beta or production-adjacent workflow metrics while persona accuracy calibration is still internal.</p>
-        </div>
-        <div class="pill-row">
-          <span class="pill">Manual CSV only</span>
-          <span class="pill">No Segment/Mixpanel/PostHog yet</span>
-          <span class="pill">Gap % visible</span>
-        </div>
+${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
+${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
+<div class="surface-card">
+  <div class="panel-title">
+    <div>
+      <span class="section-kicker">Calibration Loop</span>
+      <h2>Synthetic vs Actual Calibration</h2>
+      <p class="helper">Use manual CSV imports to compare synthetic predictions against actual beta or production-adjacent workflow metrics while persona accuracy calibration is still internal.</p>
+    </div>
+    <div class="pill-row">
+      <span class="pill">Manual CSV only</span>
+      <span class="pill">No Segment/Mixpanel/PostHog yet</span>
+      <span class="pill">Gap % visible</span>
+    </div>
+  </div>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <span class="section-kicker">Filters</span>
+    <h2>Choose scope</h2>
+    <form method="get" action="/dashboard/calibration" class="grid-3">
+      <label>Project<select name="projectId"><option value="">Select project</option>${projectOptions}</select></label>
+      <label>Environment<select name="environmentId"><option value="">Select environment</option>${environmentOptions}</select></label>
+      <label>Workflow<select name="workflowId"><option value="">All workflows</option>${workflowOptions}</select></label>
+      <div class="page-actions" style="grid-column:1 / -1;">
+        <button type="submit">Refresh comparison</button>
+        <a class="button secondary" href="/dashboard/calibration">Clear filters</a>
       </div>
-    </div>
-    <div class="surface-card">
-      <h2>Filters</h2>
-      <form method="get" action="/dashboard/calibration" class="grid-3">
-        <label>Project<select name="projectId"><option value="">Select project</option>${projectOptions}</select></label>
-        <label>Environment<select name="environmentId"><option value="">Select environment</option>${environmentOptions}</select></label>
-        <label>Workflow<select name="workflowId"><option value="">All workflows</option>${workflowOptions}</select></label>
-        <div class="page-actions" style="grid-column:1 / -1;">
-          <button type="submit">Refresh comparison</button>
-          <a class="button secondary" href="/dashboard/calibration">Clear filters</a>
-        </div>
-      </form>
-    </div>
-    <div class="surface-card">
-      <h2>Manual CSV Import</h2>
-      <p class="helper">CSV headers: <code>workflow_name,period_start,period_end,task_success_rate,completion_time_ms,error_rate,api_calls_per_session,support_ticket_count</code></p>
-      <form method="post" action="/dashboard/calibration/import">
-        <input type="hidden" name="projectId" value="${esc(args.selectedProjectId ?? "")}" />
-        <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
-        <div class="grid-2">
-          <label>Source label<input name="sourceLabel" value="Beta weekly import" required /></label>
-          <label>Notes<input name="notes" value="Calibration baseline for persona accuracy review" /></label>
-        </div>
-        <label style="margin-top:12px;">CSV payload<textarea name="csvText" required>${esc(args.sampleCsv ?? "")}</textarea></label>
-        <div class="page-actions" style="margin-top:14px;">
-          <button type="submit" data-loading-text="Importing metrics...">Import actual metrics</button>
-          <a class="button secondary" href="/dashboard/calibration?projectId=${encodeURIComponent(args.selectedProjectId ?? "")}&environmentId=${encodeURIComponent(args.selectedEnvironmentId ?? "")}&sample=1">Load sample CSV</a>
-          <a class="muted-link" href="/docs-static/prediction-calibration.md" target="_blank" rel="noreferrer">Calibration docs</a>
-        </div>
-      </form>
-    </div>
-    ${importSummary}
-    <div class="surface-card">
-      <h2>Predicted vs Actual Dashboard</h2>
-      <p class="helper">${esc(args.comparisonNote ?? "Use this view to calibrate persona accuracy over time. Synthetic API calls per session and support-ticket estimates are placeholders until telemetry integrations arrive.")}</p>
-      <div class="table-shell">
-        <table>
-          <thead>
-            <tr>
-              <th>Workflow</th>
-              <th>Task Success Rate</th>
-              <th>Completion Time</th>
-              <th>Error Rate</th>
-              <th>API Calls / Session</th>
-              <th>Support Tickets</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || '<tr><td colspan="6"><div class="empty-state">No comparison rows yet. Import actual metrics for the selected project and environment first.</div></td></tr>'}
-          </tbody>
-        </table>
+    </form>
+  </div>
+  <div class="surface-card">
+    <span class="section-kicker">Import</span>
+    <h2>Manual CSV</h2>
+    <p class="helper">CSV headers: <code>workflow_name,period_start,period_end,task_success_rate,completion_time_ms,error_rate,api_calls_per_session,support_ticket_count</code></p>
+    <form method="post" action="/dashboard/calibration/import" class="grid-2">
+      <input type="hidden" name="projectId" value="${esc(args.selectedProjectId ?? "")}" />
+      <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+      <label>Source label<input name="sourceLabel" value="Beta weekly import" required /></label>
+      <label>Notes<input name="notes" value="Calibration baseline for persona accuracy review" /></label>
+      <label style="grid-column:1/-1;">CSV payload<textarea name="csvText" required>${esc(args.sampleCsv ?? "")}</textarea></label>
+      <div class="page-actions" style="grid-column:1/-1;">
+        <button type="submit" data-loading-text="Importing metrics...">Import actual metrics</button>
+        <a class="button secondary" href="/dashboard/calibration?projectId=${encodeURIComponent(args.selectedProjectId ?? "")}&environmentId=${encodeURIComponent(args.selectedEnvironmentId ?? "")}&sample=1">Load sample CSV</a>
+        <a class="muted-link" href="/docs-static/prediction-calibration.md" target="_blank" rel="noreferrer">Calibration docs</a>
       </div>
-    </div>`
+    </form>
+  </div>
+</div>
+${importSummary}
+<div class="surface-card">
+  <span class="section-kicker">Comparison</span>
+  <h2>Predicted vs Actual Dashboard</h2>
+  <p class="helper">${esc(args.comparisonNote ?? "Use this view to calibrate persona accuracy over time. Synthetic API calls per session and support-ticket estimates are placeholders until telemetry integrations arrive.")}</p>
+  <div class="table-shell">
+    <table>
+      <thead>
+        <tr>
+          <th>Workflow</th>
+          <th>Task Success Rate</th>
+          <th>Completion Time</th>
+          <th>Error Rate</th>
+          <th>API Calls / Session</th>
+          <th>Support Tickets</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="6"><div class="empty-state">No comparison rows yet. Import actual metrics for the selected project and environment first.</div></td></tr>'}
+      </tbody>
+    </table>
+  </div>
+</div>`
   );
 }
 
@@ -849,75 +1289,117 @@ function renderTestAccountsPage(
   flash?: string
 ): string {
   const selectedEnvironment = environments.find((item) => item.id === selectedEnvironmentId) ?? environments[0];
+  const availableCount = accounts.filter((account) => account.status === "AVAILABLE").length;
+  const reservedCount = accounts.filter((account) => account.status === "RESERVED").length;
+  const disabledCount = accounts.filter((account) => account.status === "DISABLED").length;
+  const concurrentCount = accounts.filter((account) => account.allowConcurrentUse).length;
 
   const accountRows = accounts
     .map(
       (account) => `<tr>
-<td>${esc(account.label)}</td>
+<td><strong>${esc(account.label)}</strong></td>
 <td>${esc(account.username)}</td>
 <td>${esc(account.email)}</td>
 <td>${esc(account.role)}</td>
-<td>${esc(account.status)}</td>
-<td>${account.allowConcurrentUse ? "yes" : "no"}</td>
+<td>${renderStatusBadge(account.status)}</td>
+<td>${account.allowConcurrentUse ? '<span class="mini-tag">shared</span>' : '<span class="helper">single use</span>'}</td>
 <td>
-<form method="post" action="/dashboard/test-accounts/${account.id}/reserve" style="display:inline;">
+<div class="action-row" style="margin-top:0;">
+<form method="post" action="/dashboard/test-accounts/${account.id}/reserve" class="inline-form">
   <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
   <input type="hidden" name="runId" value="00000000-0000-0000-0000-000000000001" />
   <input type="hidden" name="agentId" value="00000000-0000-0000-0000-000000000001" />
   <button type="submit">Reserve</button>
 </form>
-<form method="post" action="/dashboard/test-accounts/${account.id}/release" style="display:inline; margin-left:6px;">
+<form method="post" action="/dashboard/test-accounts/${account.id}/release" class="inline-form">
   <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
   <input type="hidden" name="runId" value="00000000-0000-0000-0000-000000000001" />
   <input type="hidden" name="agentId" value="00000000-0000-0000-0000-000000000001" />
-  <button type="submit">Release</button>
+  <button type="submit" class="secondary">Release</button>
 </form>
-<form method="post" action="/dashboard/test-accounts/${account.id}/delete" style="display:inline; margin-left:6px;">
+<form method="post" action="/dashboard/test-accounts/${account.id}/delete" class="inline-form">
   <input type="hidden" name="environmentId" value="${esc(account.environmentId)}" />
-  <button type="submit">Delete</button>
-</form>
+  <button type="submit" class="danger">Delete</button>
+</form></div>
 </td></tr>`
     )
     .join("\n");
 
+  const environmentPicker = `<form method="get" action="/dashboard/test-accounts" class="grid-2">
+      <label>Environment<select name="environmentId">${environments
+        .map(
+          (environment) =>
+            `<option value="${esc(environment.id)}" ${selectedEnvironment?.id === environment.id ? "selected" : ""}>${esc(environment.name)} (${esc(environment.baseUrl)})</option>`
+        )
+        .join("")}</select></label>
+      <div class="page-actions" style="align-self:end;"><button type="submit">Load</button></div>
+    </form>`;
+
+  const accountForm = selectedEnvironment
+    ? `<div style="margin-top:18px;">
+        <span class="section-kicker">Single Account</span>
+        <h2>Create test account</h2>
+        <form method="post" action="/dashboard/test-accounts" class="grid-3">
+          <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+          <label>Label<input name="label" placeholder="Tom Riddle" required /></label>
+          <label>Username<input name="username" placeholder="triddle1999@gmail.com" required /></label>
+          <label>Email<input name="email" placeholder="triddle1999@gmail.com" required /></label>
+          <label>Role<input name="role" placeholder="tester" required /></label>
+          <label>Password<input name="password" placeholder="Qwertyasd123!!" required /></label>
+          <label>passwordSecretRef<input name="passwordSecretRef" placeholder="optional" /></label>
+          <label>Status<select name="status"><option>AVAILABLE</option><option>RESERVED</option><option>DISABLED</option></select></label>
+          <label>Notes<input name="notes" placeholder="local borrower portal test login" /></label>
+          <label style="display:flex;align-items:center;gap:10px;margin-top:28px;"><input type="checkbox" name="allowConcurrentUse" style="width:auto;margin-top:0;" />Allow concurrent use</label>
+          <div class="page-actions" style="align-self:end;"><button type="submit">Create</button></div>
+        </form>
+        <div style="margin-top:18px;">
+          <span class="section-kicker">Batch Import</span>
+          <h3>Generate 20 placeholder accounts</h3>
+          <form method="post" action="/dashboard/test-accounts/import-20" class="page-actions">
+            <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+            <button type="submit">Generate 20 Accounts</button>
+          </form>
+        </div>
+      </div>`
+    : `<div class="empty-state" style="margin-top:18px;">No environments available. Create one under Projects first.</div>`;
+
   return renderPage(
     "Test Accounts",
-    `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
-<h2>Environment</h2>
-<form method="get" action="/dashboard/test-accounts">
-<select name="environmentId">${environments
-      .map(
-        (environment) =>
-          `<option value="${esc(environment.id)}" ${selectedEnvironment?.id === environment.id ? "selected" : ""}>${esc(environment.name)} (${esc(environment.baseUrl)})</option>`
-      )
-      .join("")}</select>
-<button type="submit">Load</button>
-</form>
-${
-  selectedEnvironment
-    ? `<h2>Create Test Account</h2>
-<form method="post" action="/dashboard/test-accounts" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-  <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
-  <input name="label" placeholder="Label" required />
-  <input name="username" placeholder="Username" required />
-  <input name="email" placeholder="Email" required />
-  <input name="role" placeholder="Role" required />
-  <input name="password" placeholder="Password" required />
-  <input name="passwordSecretRef" placeholder="passwordSecretRef (optional)" />
-  <select name="status"><option>AVAILABLE</option><option>RESERVED</option><option>DISABLED</option></select>
-  <label><input type="checkbox" name="allowConcurrentUse" />Allow concurrent use</label>
-  <input name="notes" placeholder="Notes" />
-  <button type="submit">Create</button>
-</form>
-<h3>Import 20 Accounts</h3>
-<form method="post" action="/dashboard/test-accounts/import-20">
-  <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
-  <button type="submit">Generate 20 Accounts</button>
-</form>
-<h2>Existing Accounts</h2>
-<table style="width:100%;"><thead><tr><th>Label</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Concurrent</th><th>Actions</th></tr></thead><tbody>${accountRows || '<tr><td colspan="7">No accounts yet.</td></tr>'}</tbody></table>`
-    : "<p>No environments available. Create one under Projects first.</p>"
-}`
+    `${shellNav(user)}${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
+<div class="surface-card">
+  <div class="panel-title">
+    <div>
+      <span class="section-kicker">Credential Pool</span>
+      <h2>Test account orchestration</h2>
+      <p class="helper">Store the real credentials your synthetic users should log in with. One account is enough for a smoke test, and you can scale up later.</p>
+    </div>
+    <div class="pill-row">
+      <span class="pill">${selectedEnvironment ? esc(selectedEnvironment.name) : "No environment"}</span>
+      <span class="pill">${accounts.length} account${accounts.length === 1 ? "" : "s"}</span>
+    </div>
+  </div>
+  <div class="dial-grid">
+    ${renderDialCard("Available", percent(availableCount, Math.max(accounts.length, 1)), "#58ff94", "ready for agents")}
+    ${renderDialCard("Reserved", percent(reservedCount, Math.max(accounts.length, 1)), "#ffb649", "currently in use")}
+    ${renderDialCard("Disabled", percent(disabledCount, Math.max(accounts.length, 1)), "#ff6b86", "blocked from runs")}
+    ${renderDialCard("Shared use", percent(concurrentCount, Math.max(accounts.length, 1)), "#6fb8ff", "concurrent enabled")}
+  </div>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <span class="section-kicker">Environment Target</span>
+    <h2>Choose environment</h2>
+    ${environmentPicker}
+    ${accountForm}
+  </div>
+  <div class="surface-card">
+    <span class="section-kicker">Account Table</span>
+    <h2>Existing accounts</h2>
+    <div class="table-shell">
+      <table style="width:100%;"><thead><tr><th>Label</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Concurrent</th><th>Actions</th></tr></thead><tbody>${accountRows || '<tr><td colspan="7"><div class="empty-state">No accounts yet.</div></td></tr>'}</tbody></table>
+    </div>
+  </div>
+</div>`
   );
 }
 
@@ -1051,62 +1533,65 @@ function renderWorkflowsPage(
 ): string {
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
   const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId) ?? workflows[0];
-
   const list = workflows
     .map(
-      (workflow) => `<li style="border:1px solid #ddd;padding:10px;margin-bottom:8px;">
-<strong>${esc(workflow.name)}</strong> (${esc(workflow.workflowType)})<br />
-<small>${esc(workflow.goal)}</small>
-<div>
-  <a href="/dashboard/workflows?projectId=${workflow.projectId}&workflowId=${workflow.id}">Edit</a>
-  <form method="post" action="/dashboard/workflows/${workflow.id}/delete" style="display:inline; margin-left:8px;">
-    <input type="hidden" name="projectId" value="${esc(workflow.projectId)}" />
-    <button type="submit">Delete</button>
-  </form>
-</div></li>`
+      (workflow) => `<li class="list-item">
+        <div class="panel-title">
+          <div>
+            <strong>${esc(workflow.name)}</strong>
+            <div class="list-meta">${esc(workflow.goal)}</div>
+          </div>
+          <div class="action-row" style="margin-top:0;">
+            <a class="button secondary" href="/dashboard/workflows?projectId=${workflow.projectId}&workflowId=${workflow.id}">Edit</a>
+            <form method="post" action="/dashboard/workflows/${workflow.id}/delete" class="inline-form">
+              <input type="hidden" name="projectId" value="${esc(workflow.projectId)}" />
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </div>
+        </div>
+        <div class="pill-row">
+          <span class="pill">${esc(workflow.workflowType)}</span>
+          <span class="pill">${esc(workflow.status)}</span>
+          <span class="pill">${workflow.maxSteps} steps</span>
+        </div>
+      </li>`
     )
     .join("\n");
 
   return renderPage(
     "Workflows",
-    `${shellNav(user)}${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
-<h2>Select Project</h2>
-<form method="get" action="/dashboard/workflows">
-<select name="projectId">${projects
-      .map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`)
-      .join("")}</select>
-<button type="submit">Load</button>
-</form>
-${selectedProject ? `<h2>Create Workflow</h2>
-<form method="post" action="/dashboard/workflows" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-<input type="hidden" name="projectId" value="${selectedProject.id}" />
-<input name="name" placeholder="Name" required />
-<input name="workflowType" placeholder="SCRIPTED|GOAL_BASED|EXPLORATORY" value="GOAL_BASED" required />
-<input name="status" placeholder="DRAFT|ACTIVE|ARCHIVED" value="DRAFT" required />
-<input name="startingPath" placeholder="/start" required />
-<input name="maxSteps" placeholder="100" required />
-<input name="maxDurationSeconds" placeholder="600" required />
-<input name="goal" placeholder="User completes checkout" required style="grid-column:1/-1;" />
-<textarea name="description" placeholder="Description" style="grid-column:1/-1;"></textarea>
-<textarea name="successCriteria" placeholder="URL_CONTAINS: /checkout/success\nPAGE_CONTAINS_TEXT: Thank you" style="grid-column:1/-1;height:100px;" required></textarea>
-<button type="submit">Create Workflow</button>
-</form>
-<h2>Workflows</h2>
-<ul style="list-style:none;padding:0;">${list || "<li>No workflows yet.</li>"}</ul>` : "<p>Create a project first.</p>"}
-${selectedWorkflow ? `<h2>Edit Workflow: ${esc(selectedWorkflow.name)}</h2>
-<form method="post" action="/dashboard/workflows/${selectedWorkflow.id}/update" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-<input type="hidden" name="projectId" value="${selectedWorkflow.projectId}" />
-<input name="name" value="${esc(selectedWorkflow.name)}" required />
-<input name="workflowType" value="${esc(selectedWorkflow.workflowType)}" required />
-<input name="status" value="${esc(selectedWorkflow.status)}" required />
-<input name="startingPath" value="${esc(selectedWorkflow.startingPath)}" required />
-<input name="maxSteps" value="${selectedWorkflow.maxSteps}" required />
-<input name="maxDurationSeconds" value="${selectedWorkflow.maxDurationSeconds}" required />
-<input name="goal" value="${esc(selectedWorkflow.goal)}" required style="grid-column:1/-1;" />
-<textarea name="description" style="grid-column:1/-1;">${esc(selectedWorkflow.description ?? "")}</textarea>
-<textarea name="successCriteria" style="grid-column:1/-1;height:100px;" required>${esc(successCriteriaToText(selectedWorkflow.successCriteria || []))}</textarea>
-<button type="submit">Save Workflow</button>
-</form>` : ""}`
+    `${shellNav(user)}
+${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
+<div class="surface-card">
+  <span class="section-kicker">Workflow Builder</span>
+  <h2>Goal definitions</h2>
+  <p class="helper">Workflows tell the synthetic users what they should accomplish and how success gets recognized.</p>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <span class="section-kicker">Project Target</span>
+    <h2>Select project</h2>
+    <form method="get" action="/dashboard/workflows" class="grid-2">
+      <label>Project<select name="projectId">${projects
+        .map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`)
+        .join("")}</select></label>
+      <div class="page-actions" style="align-self:end;"><button type="submit">Load</button></div>
+    </form>
+    <div class="dial-grid">
+      ${renderDialCard("Workflows", percent(workflows.length, Math.max(workflows.length, 1)), "#2cf6e3", "defined goals")}
+      ${renderDialCard("Active", percent(workflows.filter((workflow) => workflow.status === "ACTIVE").length, Math.max(workflows.length, 1)), "#58ff94", "ready to run")}
+      ${renderDialCard("Drafts", percent(workflows.filter((workflow) => workflow.status === "DRAFT").length, Math.max(workflows.length, 1)), "#ffb649", "still being shaped")}
+    </div>
+  </div>
+  <div class="surface-card">
+    <span class="section-kicker">Workflow Library</span>
+    <h2>Existing workflows</h2>
+    <ul class="stack-list">${list || '<li class="list-item"><span class="helper">No workflows yet.</span></li>'}</ul>
+  </div>
+</div>
+${selectedProject ? `<div class="surface-card"><span class="section-kicker">Create Workflow</span><h2>New workflow</h2><form method="post" action="/dashboard/workflows" class="grid-2"><input type="hidden" name="projectId" value="${selectedProject.id}" /><label>Name<input name="name" placeholder="Borrower login" required /></label><label>Workflow Type<input name="workflowType" placeholder="SCRIPTED|GOAL_BASED|EXPLORATORY" value="GOAL_BASED" required /></label><label>Status<input name="status" placeholder="DRAFT|ACTIVE|ARCHIVED" value="DRAFT" required /></label><label>Starting Path<input name="startingPath" placeholder="/login" required /></label><label>Max Steps<input name="maxSteps" placeholder="100" required /></label><label>Max Duration<input name="maxDurationSeconds" placeholder="600" required /></label><label style="grid-column:1/-1;">Goal<input name="goal" placeholder="User completes checkout" required /></label><label style="grid-column:1/-1;">Description<textarea name="description" placeholder="Description"></textarea></label><label style="grid-column:1/-1;">Success Criteria<textarea name="successCriteria" placeholder="URL_CONTAINS: /checkout/success\nPAGE_CONTAINS_TEXT: Thank you" required></textarea></label><div class="page-actions" style="grid-column:1/-1;"><button type="submit">Create Workflow</button></div></form></div>` : "<div class=\"empty-state\">Create a project first.</div>"}
+${selectedWorkflow ? `<div class="surface-card"><span class="section-kicker">Edit Workflow</span><h2>${esc(selectedWorkflow.name)}</h2><form method="post" action="/dashboard/workflows/${selectedWorkflow.id}/update" class="grid-2"><input type="hidden" name="projectId" value="${selectedWorkflow.projectId}" /><label>Name<input name="name" value="${esc(selectedWorkflow.name)}" required /></label><label>Workflow Type<input name="workflowType" value="${esc(selectedWorkflow.workflowType)}" required /></label><label>Status<input name="status" value="${esc(selectedWorkflow.status)}" required /></label><label>Starting Path<input name="startingPath" value="${esc(selectedWorkflow.startingPath)}" required /></label><label>Max Steps<input name="maxSteps" value="${selectedWorkflow.maxSteps}" required /></label><label>Max Duration<input name="maxDurationSeconds" value="${selectedWorkflow.maxDurationSeconds}" required /></label><label style="grid-column:1/-1;">Goal<input name="goal" value="${esc(selectedWorkflow.goal)}" required /></label><label style="grid-column:1/-1;">Description<textarea name="description">${esc(selectedWorkflow.description ?? "")}</textarea></label><label style="grid-column:1/-1;">Success Criteria<textarea name="successCriteria" required>${esc(successCriteriaToText(selectedWorkflow.successCriteria || []))}</textarea></label><div class="page-actions" style="grid-column:1/-1;"><button type="submit">Save Workflow</button></div></form></div>` : ""}
+`
   );
 }
 
@@ -1192,18 +1677,14 @@ function renderLlmProvidersPage(
   const rows = configs
     .map(
       (config) => `<tr>
-<td>${esc(config.provider)}</td>
+<td><strong>${esc(config.provider)}</strong></td>
 <td>${esc(config.model)}</td>
-<td>${esc(config.baseUrl ?? "-")}</td>
+<td><code>${esc(config.baseUrl ?? "-")}</code></td>
 <td>${esc(String(config.timeoutMs ?? 30000))}</td>
-<td>${esc(config.status)}</td>
+<td>${renderStatusBadge(config.status)}</td>
 <td>${esc(config.lastCheckedAt ? new Date(config.lastCheckedAt).toLocaleString() : "-")}</td>
 <td style="max-width:220px;">${esc(config.lastError ?? "-")}</td>
-<td>
-  <form method="post" action="/dashboard/llm-providers/${config.id}/test" style="display:inline;">
-    <button type="submit">Test Connection</button>
-  </form>
-</td>
+<td><form method="post" action="/dashboard/llm-providers/${config.id}/test" class="inline-form"><button type="submit">Test Connection</button></form></td>
 </tr>`
     )
     .join("\n");
@@ -1211,39 +1692,39 @@ function renderLlmProvidersPage(
   return renderPage(
     "LLM Providers",
     `${shellNav(user)}
-${flash ? `<p style="color:#0a5;">${esc(flash)}</p>` : ""}
-${error ? `<p style="color:#b00020;">${esc(error)}</p>` : ""}
-<h2>Add Provider Configuration</h2>
-<form method="post" action="/dashboard/llm-providers" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-  <label>Provider
-    <select name="provider">
-      <option value="openai">openai</option>
-      <option value="anthropic">anthropic</option>
-    </select>
-  </label>
-  <label>Model
-    <input name="model" placeholder="gpt-4o-mini or claude-3-5-haiku-latest" required />
-  </label>
-  <label>API Key
-    <input type="password" name="apiKey" required />
-  </label>
-  <label>Base URL (optional)
-    <input name="baseUrl" placeholder="https://api.openai.com/v1" />
-  </label>
-  <label>Timeout (ms)
-    <input name="timeoutMs" type="number" min="1000" max="120000" value="30000" />
-  </label>
-  <label>Status
-    <select name="status">
-      <option value="inactive">inactive</option>
-      <option value="active">active</option>
-      <option value="error">error</option>
-    </select>
-  </label>
-  <button type="submit" style="grid-column:1/-1;">Save Provider</button>
-</form>
-<h2>Provider Configurations</h2>
-<table style="width:100%;"><thead><tr><th>Provider</th><th>Model</th><th>Base URL</th><th>Timeout</th><th>Status</th><th>Last Checked</th><th>Last Error</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No provider configs yet.</td></tr>'}</tbody></table>`
+${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
+${error ? `<div class="error">${esc(error)}</div>` : ""}
+<div class="surface-card">
+  <span class="section-kicker">Model Gateway</span>
+  <h2>LLM Providers</h2>
+  <p class="helper">Manage hosted model credentials separately from the app-under-test. Keep provider keys out of logs and use the built-in test button before a run.</p>
+</div>
+<div class="panel-grid">
+  <div class="surface-card">
+    <span class="section-kicker">Add Provider</span>
+    <h2>Provider configuration</h2>
+    <form method="post" action="/dashboard/llm-providers" class="grid-2">
+      <label>Provider
+        <select name="provider"><option value="openai">openai</option><option value="anthropic">anthropic</option></select>
+      </label>
+      <label>Model<input name="model" placeholder="gpt-4o-mini or claude-3-5-haiku-latest" required /></label>
+      <label>API Key<input type="password" name="apiKey" required /></label>
+      <label>Base URL (optional)<input name="baseUrl" placeholder="https://api.openai.com/v1" /></label>
+      <label>Timeout (ms)<input name="timeoutMs" type="number" min="1000" max="120000" value="30000" /></label>
+      <label>Status
+        <select name="status"><option value="inactive">inactive</option><option value="active">active</option><option value="error">error</option></select>
+      </label>
+      <div class="page-actions" style="grid-column:1/-1;"><button type="submit">Save Provider</button></div>
+    </form>
+  </div>
+  <div class="surface-card">
+    <span class="section-kicker">Provider Health</span>
+    <h2>Configured providers</h2>
+    <div class="table-shell">
+      <table style="width:100%;"><thead><tr><th>Provider</th><th>Model</th><th>Base URL</th><th>Timeout</th><th>Status</th><th>Last Checked</th><th>Last Error</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="8"><div class="empty-state">No provider configs yet.</div></td></tr>'}</tbody></table>
+    </div>
+  </div>
+</div>`
   );
 }
 
@@ -1347,66 +1828,42 @@ function renderRunSetupPage(args: {
 ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
 ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
 <div class="surface-card">
-  <div class="stack-row">
+  <div class="panel-title">
     <div>
-      <div class="eyebrow">Demo Launch Flow</div>
-      <h2 style="margin:10px 0 6px;">Simulation Run Setup</h2>
+      <span class="section-kicker">Demo Launch Flow</span>
+      <h2>Simulation Run Setup</h2>
       <p class="helper">Choose the project, environment, and workflow you want to showcase, then either use the 20-agent demo preset or launch a custom run.</p>
     </div>
     <div class="metrics-grid" style="min-width:min(100%, 430px);">
-      <div class="metric-box"><span class="helper">Projects</span><strong>${args.options.projects.length}</strong></div>
-      <div class="metric-box"><span class="helper">Active workflows</span><strong>${activeWorkflows.length}</strong></div>
-      <div class="metric-box"><span class="helper">Available accounts</span><strong>${availableAccounts.length}</strong></div>
-      <div class="metric-box"><span class="helper">Personas</span><strong>${args.options.personas.length}</strong></div>
+      ${renderMetricBox("Projects", args.options.projects.length, "available in org")}
+      ${renderMetricBox("Active workflows", activeWorkflows.length, "ready to run")}
+      ${renderMetricBox("Available accounts", availableAccounts.length, "eligible logins")}
+      ${renderMetricBox("Personas", args.options.personas.length, "behavior models")}
     </div>
   </div>
 </div>
-<div class="grid-2">
+<div class="panel-grid">
   <div class="surface-card">
-    <h2>1. Choose Project and Environment</h2>
+    <span class="section-kicker">1. Scope</span>
+    <h2>Choose project and environment</h2>
     <p class="helper">These filters only refresh available workflows and test accounts. They do not start a run.</p>
     <form method="get" action="/dashboard/run-setup" class="grid-2">
-      <label>Project
-        <select name="projectId" required onchange="this.form.submit()">
-        ${args.options.projects
-          .map(
-            (project) =>
-              `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`
-          )
-          .join("")}
-        </select>
-      </label>
-      <label>Environment
-        <select name="environmentId" required onchange="this.form.submit()">
-        ${environments
-          .map(
-            (environment) =>
-              `<option value="${environment.id}" ${args.selectedEnvironmentId === environment.id ? "selected" : ""}>${esc(environment.name)} · ${esc(environment.type)}</option>`
-          )
-          .join("")}
-        </select>
-      </label>
+      <label>Project<select name="projectId" required onchange="this.form.submit()">${args.options.projects
+        .map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${esc(project.name)}</option>`)
+        .join("")}</select></label>
+      <label>Environment<select name="environmentId" required onchange="this.form.submit()">${environments
+        .map((environment) => `<option value="${environment.id}" ${args.selectedEnvironmentId === environment.id ? "selected" : ""}>${esc(environment.name)} · ${esc(environment.type)}</option>`)
+        .join("")}</select></label>
       <noscript><button type="submit">Refresh options</button></noscript>
     </form>
-    ${
-      args.options.projects.length === 0
-        ? `<div class="empty-state">No projects found yet. Create a project first, then add an environment before starting a run.</div>`
-        : ""
-    }
-    ${
-      selectedProject && environments.length === 0
-        ? `<div class="empty-state">Project <strong>${esc(selectedProject.name)}</strong> has no environments yet. Add one from the Projects screen to continue.</div>`
-        : ""
-    }
+    ${args.options.projects.length === 0 ? `<div class="empty-state" style="margin-top:16px;">No projects found yet. Create a project first, then add an environment before starting a run.</div>` : ""}
+    ${selectedProject && environments.length === 0 ? `<div class="empty-state" style="margin-top:16px;">Project <strong>${esc(selectedProject.name)}</strong> has no environments yet. Add one from the Projects screen to continue.</div>` : ""}
   </div>
   <div class="surface-card">
-    <h2>2. 20-Agent Demo Preset</h2>
+    <span class="section-kicker">2. Preset</span>
+    <h2>20-agent demo</h2>
     <p class="helper">Fastest path for the live walkthrough. This preset picks the configured demo project, environment, workflow, personas, and accounts automatically.</p>
-    <div class="pill-row" style="margin-bottom:14px;">
-      <span class="pill">20 agents</span>
-      <span class="pill">live dashboard</span>
-      <span class="pill">report included</span>
-    </div>
+    <div class="pill-row" style="margin-bottom:14px;"><span class="pill">20 agents</span><span class="pill">live dashboard</span><span class="pill">report included</span></div>
     <form method="post" action="/dashboard/demo-runs/20-agent">
       <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
       <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
@@ -1416,31 +1873,19 @@ ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
   </div>
 </div>
 <div class="surface-card">
-  <h2>3. Custom Run</h2>
+  <span class="section-kicker">3. Custom Run</span>
+  <h2>Launch a bespoke test</h2>
   ${
     hasSetupPrereqs
       ? `<form method="post" action="/dashboard/run-setup/preview" class="grid-2">
         <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
         <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
-        <label>Workflow
-          <select name="workflowId" required>${activeWorkflows
-            .map(
-              (workflow) =>
-                `<option value="${workflow.id}" ${args.selectedWorkflowId === workflow.id ? "selected" : ""}>${esc(workflow.name)} (${esc(workflow.status)})</option>`
-            )
-            .join("")}</select>
-        </label>
-        <label>Budget Policy
-          <select name="budgetPolicyId" required>
-            ${args.options.budgetPolicies.map((policy) => `<option value="${policy.id}">${esc(policy.name)}</option>`).join("")}
-          </select>
-        </label>
-        <label>Number of Agents
-          <input type="number" min="1" max="100" name="agentCount" value="${Math.min(availableAccounts.length, 5)}" required />
-        </label>
-        <label>Max Run Duration (seconds)
-          <input type="number" min="30" max="7200" name="maxRunDurationSeconds" value="600" required />
-        </label>
+        <label>Workflow<select name="workflowId" required>${activeWorkflows
+          .map((workflow) => `<option value="${workflow.id}" ${args.selectedWorkflowId === workflow.id ? "selected" : ""}>${esc(workflow.name)} (${esc(workflow.status)})</option>`)
+          .join("")}</select></label>
+        <label>Budget Policy<select name="budgetPolicyId" required>${args.options.budgetPolicies.map((policy) => `<option value="${policy.id}">${esc(policy.name)}</option>`).join("")}</select></label>
+        <label>Number of Agents<input type="number" min="1" max="100" name="agentCount" value="${Math.min(availableAccounts.length, 5)}" required /></label>
+        <label>Max Run Duration (seconds)<input type="number" min="30" max="7200" name="maxRunDurationSeconds" value="600" required /></label>
         <div>
           <h3>Personas</h3>
           <p class="helper">Select one or more personas to distribute across agents.</p>
@@ -1455,27 +1900,14 @@ ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
           <button type="submit" data-loading-text="Preparing summary...">Review run summary</button>
         </div>
       </form>`
-      : `<div class="empty-state">
-          The run launcher is waiting on setup data.
+      : `<div class="empty-state" style="margin-top:16px;">The run launcher is waiting on setup data.
           <div style="margin-top:10px;">
-            ${
-              args.options.projects.length === 0 ? `<div>Need at least one project.</div>` : ``
-            }
-            ${
-              environments.length === 0 ? `<div>Need at least one environment in the selected project.</div>` : ``
-            }
-            ${
-              activeWorkflows.length === 0 ? `<div>Need at least one ACTIVE workflow for the selected project.</div>` : ``
-            }
-            ${
-              args.options.personas.length === 0 ? `<div>Need at least one persona.</div>` : ``
-            }
-            ${
-              availableAccounts.length === 0 ? `<div>Need at least one non-disabled test account in the selected environment.</div>` : ``
-            }
-            ${
-              args.options.budgetPolicies.length === 0 ? `<div>Need at least one active budget policy.</div>` : ``
-            }
+            ${args.options.projects.length === 0 ? `<div>Need at least one project.</div>` : ``}
+            ${environments.length === 0 ? `<div>Need at least one environment in the selected project.</div>` : ``}
+            ${activeWorkflows.length === 0 ? `<div>Need at least one ACTIVE workflow for the selected project.</div>` : ``}
+            ${args.options.personas.length === 0 ? `<div>Need at least one persona.</div>` : ``}
+            ${availableAccounts.length === 0 ? `<div>Need at least one non-disabled test account in the selected environment.</div>` : ``}
+            ${args.options.budgetPolicies.length === 0 ? `<div>Need at least one active budget policy.</div>` : ``}
           </div>
         </div>`
   }

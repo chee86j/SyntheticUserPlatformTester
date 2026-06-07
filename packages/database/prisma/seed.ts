@@ -4,57 +4,104 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const organization = await prisma.organization.create({
-    data: {
-      name: "Synthetic Labs"
-    }
-  });
+  const organization =
+    (await prisma.organization.findFirst({
+      where: {
+        name: "Synthetic Labs"
+      }
+    })) ??
+    (await prisma.organization.create({
+      data: {
+        name: "Synthetic Labs"
+      }
+    }));
 
   const adminPassword = "ChangeMe123!";
   const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
 
-  const adminUser = await prisma.user.create({
-    data: {
-      organizationId: organization.id,
-      email: "admin@syntheticlabs.local",
-      name: "Platform Owner",
-      role: "OWNER",
-      passwordHash: adminPasswordHash
-    }
-  });
+  const adminUser =
+    (await prisma.user.findUnique({
+      where: {
+        email: "admin@syntheticlabs.local"
+      }
+    })) ??
+    (await prisma.user.create({
+      data: {
+        organizationId: organization.id,
+        email: "admin@syntheticlabs.local",
+        name: "Platform Owner",
+        role: "OWNER",
+        passwordHash: adminPasswordHash
+      }
+    }));
 
-  await prisma.budgetPolicy.create({
-    data: {
-      organizationId: organization.id,
-      name: "Default Budget",
-      maxCostPerRun: "50.0000",
-      maxTokensPerRun: 500000,
-      maxActionsPerAgent: 200,
-      maxDurationPerRunSeconds: 900,
-      maxDailyCost: "250.0000",
-      stopOnBudgetExceeded: true,
-      isActive: true
-    }
-  });
+  if (adminUser.passwordHash !== adminPasswordHash) {
+    await prisma.user.update({
+      where: {
+        email: adminUser.email
+      },
+      data: {
+        organizationId: organization.id,
+        name: "Platform Owner",
+        role: "OWNER",
+        passwordHash: adminPasswordHash
+      }
+    });
+  }
 
-  const project = await prisma.project.create({
-    data: {
-      organizationId: organization.id,
-      name: "Core Validation"
-    }
-  });
+  const budgetPolicy =
+    (await prisma.budgetPolicy.findFirst({
+      where: {
+        organizationId: organization.id,
+        name: "Default Budget"
+      }
+    })) ??
+    (await prisma.budgetPolicy.create({
+      data: {
+        organizationId: organization.id,
+        name: "Default Budget",
+        maxCostPerRun: "50.0000",
+        maxTokensPerRun: 500000,
+        maxActionsPerAgent: 200,
+        maxDurationPerRunSeconds: 900,
+        maxDailyCost: "250.0000",
+        stopOnBudgetExceeded: true,
+        isActive: true
+      }
+    }));
 
-  const environment = await prisma.environment.create({
-    data: {
-      organizationId: organization.id,
-      projectId: project.id,
-      name: "staging",
-      baseUrl: "https://staging.example.local",
-      type: "STAGING",
-      allowedDomains: ["staging.example.local"],
-      status: "ACTIVE"
-    }
-  });
+  const project =
+    (await prisma.project.findFirst({
+      where: {
+        organizationId: organization.id,
+        name: "Core Validation"
+      }
+    })) ??
+    (await prisma.project.create({
+      data: {
+        organizationId: organization.id,
+        name: "Core Validation"
+      }
+    }));
+
+  const environment =
+    (await prisma.environment.findFirst({
+      where: {
+        projectId: project.id,
+        name: "staging"
+      }
+    })) ??
+    (await prisma.environment.create({
+      data: {
+        organizationId: organization.id,
+        projectId: project.id,
+        name: "staging",
+        baseUrl: "https://staging.example.local",
+        type: "STAGING",
+        allowedDomains: ["staging.example.local"],
+        status: "ACTIVE"
+      }
+    }));
 
   const personas = [
     {
@@ -133,7 +180,8 @@ async function main(): Promise<void> {
     data: personas.map((persona) => ({
       organizationId: organization.id,
       ...persona
-    }))
+    })),
+    skipDuplicates: true
   });
 
   await prisma.testAccount.createMany({
@@ -152,7 +200,8 @@ async function main(): Promise<void> {
         status: "AVAILABLE",
         notes: "Seeded test account"
       };
-    })
+    }),
+    skipDuplicates: true
   });
 
   const workflows = [
@@ -204,15 +253,41 @@ async function main(): Promise<void> {
       successCriteria: workflow.successCriteria,
       workflowType: workflow.workflowType,
       status: workflow.status
-    }))
+    })),
+    skipDuplicates: true
+  });
+
+  await prisma.budgetPolicy.update({
+    where: {
+      organizationId_name: {
+        organizationId: organization.id,
+        name: "Default Budget"
+      }
+    },
+    data: {
+      maxCostPerRun: "50.0000",
+      maxTokensPerRun: 500000,
+      maxActionsPerAgent: 200,
+      maxDurationPerRunSeconds: 900,
+      maxDailyCost: "250.0000",
+      stopOnBudgetExceeded: true,
+      isActive: true
+    }
+  });
+
+  const refreshedAdminUser = await prisma.user.findUnique({
+    where: {
+      email: adminUser.email
+    }
   });
 
   console.log("Seed complete", {
     organizationId: organization.id,
-    adminUserId: adminUser.id,
+    adminUserId: refreshedAdminUser?.id ?? adminUser.id,
     adminEmail: adminUser.email,
     projectId: project.id,
-    environmentId: environment.id
+    environmentId: environment.id,
+    budgetPolicyId: budgetPolicy.id
   });
 }
 
