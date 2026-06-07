@@ -1,5 +1,11 @@
 import { mkdir } from "node:fs/promises";
-import { ArtifactRepository, RunRepository, TestAccountRepository } from "@synthetic/database";
+import {
+  ArtifactRepository,
+  LlmProviderConfigRepository,
+  PersonaRepository,
+  RunRepository,
+  TestAccountRepository
+} from "@synthetic/database";
 import { RunStatus, type EventSeverity } from "@prisma/client";
 import { buildScript } from "../lib/script-builder.js";
 import { toStoredArtifactLocator } from "../lib/artifact-storage.js";
@@ -10,6 +16,8 @@ import { env } from "../lib/config.js";
 import { enqueueReportJob } from "../queue/queues.js";
 import { AccountReservationService } from "./account-reservation-service.js";
 import { EventEmitterService } from "./event-emitter-service.js";
+import { runSingleLlmAgent } from "./llm-agent-runner.js";
+import type { PersonaTraits } from "./persona-behavior-service.js";
 
 class InfrastructureError extends Error {
   constructor(message: string) {
@@ -19,6 +27,9 @@ class InfrastructureError extends Error {
 }
 
 export class AgentJobProcessor {
+  private readonly personaRepository = new PersonaRepository();
+  private readonly llmProviderConfigRepository = new LlmProviderConfigRepository();
+
   constructor(
     private readonly runRepository: RunRepository,
     private readonly testAccountRepository: TestAccountRepository,
@@ -60,41 +71,108 @@ export class AgentJobProcessor {
       await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "agent.started", payload: { accountLabel: account.label } });
       await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "agent.logged_in", payload: { accountLabel: account.label } });
 
-      const actions = buildScript(
-        { startingPath: run.workflow.startingPath, successCriteria: run.workflow.successCriteria },
-        run.environment.baseUrl,
-        { username: account.username, password: accountPassword }
-      );
-
-      await executeScriptedWorkflow({
-        actions,
-        runDir,
-        baseUrl: run.environment.baseUrl,
-        allowedDomains,
-        maxActions: run.budgetPolicy?.maxActionsPerAgent ?? null,
-        timeoutMs,
-        emit: (payload) =>
-          this.eventEmitter.emit({
-            runId: run.id,
-            agentId: agent.id,
-            personaId,
-            eventType: payload.eventType,
-            severity: payload.severity as EventSeverity | undefined,
-            payload: payload.payload
-          }),
-        onArtifact: async (artifact) => {
-          await this.artifactRepository.create({
-            simulationRunId: run.id,
-            simulationAgentId: agent.id,
-            type: artifact.type,
-            uri: toStoredArtifactLocator(artifact.uri)
-          });
+      let actionCount = 0;
+      const emit = (payload: {
+        eventType:
+          | "action.started"
+          | "action.completed"
+          | "action.failed"
+          | "screenshot.captured"
+          | "artifact.created"
+          | "console.error"
+          | "network.failed";
+        severity?: "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+        payload: Record<string, unknown>;
+      }) => {
+        if (payload.eventType === "action.completed") {
+          actionCount += 1;
         }
-      });
+
+        return this.eventEmitter.emit({
+          runId: run.id,
+          agentId: agent.id,
+          personaId,
+          eventType: payload.eventType,
+          severity: payload.severity as EventSeverity | undefined,
+          payload: payload.payload
+        });
+      };
+
+      const onArtifact = async (artifact: {
+        type: "SCREENSHOT" | "TRACE" | "VIDEO" | "CONSOLE_LOG" | "NETWORK_LOG";
+        uri: string;
+      }) => {
+        await this.artifactRepository.create({
+          simulationRunId: run.id,
+          simulationAgentId: agent.id,
+          type: artifact.type,
+          uri: toStoredArtifactLocator(artifact.uri)
+        });
+      };
+
+      if (env.RUNNER_USE_LLM) {
+        const providerConfigId = await this.resolveProviderConfigId(run.organizationId);
+        if (!providerConfigId) {
+          throw new InfrastructureError("No active LLM provider config available for LLM runner");
+        }
+
+        const persona = personaId
+          ? await this.personaRepository.findByIdForOrganization(personaId, run.organizationId)
+          : null;
+
+        const startUrl = new URL(run.workflow.startingPath || "/", run.environment.baseUrl).toString();
+        const llmResult = await runSingleLlmAgent({
+          runId: run.id,
+          agentId: agent.id,
+          runDir,
+          startUrl,
+          baseUrl: run.environment.baseUrl,
+          allowedDomains,
+          timeoutMs,
+          workflow: {
+            goal: run.workflow.goal,
+            startingPath: run.workflow.startingPath,
+            maxSteps: run.workflow.maxSteps,
+            successCriteria: run.workflow.successCriteria
+          },
+          personaTraits: toPersonaTraits(persona),
+          llmComplete: async ({ prompt: llmPrompt, runId: llmRunId, agentId: llmAgentId }) =>
+            this.eventEmitter.completeWithLlm({
+              runId: llmRunId,
+              agentId: llmAgentId,
+              providerConfigId,
+              prompt: llmPrompt
+            }),
+          emit,
+          onArtifact,
+          maxActionsPerAgent: run.budgetPolicy?.maxActionsPerAgent ?? null
+        });
+
+        if (!llmResult.completed) {
+          throw new ProductWorkflowError("LLM agent did not satisfy workflow success criteria");
+        }
+      } else {
+        const actions = buildScript(
+          { startingPath: run.workflow.startingPath, successCriteria: run.workflow.successCriteria },
+          run.environment.baseUrl,
+          { username: account.username, password: accountPassword }
+        );
+
+        await executeScriptedWorkflow({
+          actions,
+          runDir,
+          baseUrl: run.environment.baseUrl,
+          allowedDomains,
+          maxActions: run.budgetPolicy?.maxActionsPerAgent ?? null,
+          timeoutMs,
+          emit,
+          onArtifact
+        });
+      }
 
       await this.runRepository.updateAgentStatus(agent.id, "COMPLETED", { finishedAt: new Date() });
-      await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "workflow.completed", payload: { actions: actions.length } });
-      await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "agent.completed", payload: { actions: actions.length } });
+      await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "workflow.completed", payload: { actions: actionCount } });
+      await this.eventEmitter.emit({ runId: run.id, agentId: agent.id, personaId, eventType: "agent.completed", payload: { actions: actionCount } });
 
       await this.maybeCompleteRun(run.id);
     } catch (error) {
@@ -130,6 +208,13 @@ export class AgentJobProcessor {
     }
   }
 
+  private async resolveProviderConfigId(organizationId: string): Promise<string | null> {
+    if (env.RUNNER_LLM_PROVIDER_CONFIG_ID) return env.RUNNER_LLM_PROVIDER_CONFIG_ID;
+    const configs = await this.llmProviderConfigRepository.listByOrganization(organizationId);
+    const active = configs.find((config) => config.status === "active" && config.isActive);
+    return active?.id ?? null;
+  }
+
   private async maybeCompleteRun(runId: string): Promise<void> {
     const agents = await this.runRepository.listAgentsByRun(runId);
     const incomplete = agents.filter((agent) => agent.status === "IDLE" || agent.status === "RUNNING");
@@ -162,6 +247,42 @@ export class AgentJobProcessor {
 
     await enqueueReportJob(runId);
   }
+}
+
+function toPersonaTraits(
+  persona:
+    | {
+        name: string;
+        role: string;
+        industry: string;
+        technicalProficiency: number;
+        domainExpertise: number;
+        timePressure: number;
+        patience: number;
+        confidence: number;
+        errorRecovery: number;
+        riskTolerance: number;
+        accessibilityNeeds: string[];
+        behaviorNotes: string;
+      }
+    | null
+): PersonaTraits | null {
+  if (!persona) return null;
+
+  return {
+    name: persona.name,
+    role: persona.role,
+    industry: persona.industry,
+    technicalProficiency: persona.technicalProficiency,
+    domainExpertise: persona.domainExpertise,
+    timePressure: persona.timePressure,
+    patience: persona.patience,
+    confidence: persona.confidence,
+    errorRecovery: persona.errorRecovery,
+    riskTolerance: persona.riskTolerance,
+    accessibilityNeeds: persona.accessibilityNeeds,
+    behaviorNotes: persona.behaviorNotes
+  };
 }
 
 function resolveAgentTimeoutMs(runTimeoutSeconds: number, budgetTimeoutSeconds: number | null): number {

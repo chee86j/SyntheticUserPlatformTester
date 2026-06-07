@@ -59,3 +59,38 @@ test("EventEmitterService requests findings generation through the API boundary"
     }
   ]);
 });
+
+test("EventEmitterService routes LLM completion requests through the API boundary", async () => {
+  const requests: Array<{ path: string; options?: { method?: string; body?: unknown } }> = [];
+  const service = new EventEmitterService({
+    request: async (path: string, options?: { method?: string; body?: unknown }) => {
+      requests.push({ path, options });
+      return { text: "{\"action\":\"finish\"}", parsedJson: { action: "finish" } };
+    }
+  } as never);
+
+  const result = await service.completeWithLlm({
+    runId: "run-99",
+    agentId: "agent-99",
+    providerConfigId: "11111111-1111-1111-1111-111111111111",
+    prompt: "choose one action"
+  });
+
+  assert.deepEqual(result, { text: "{\"action\":\"finish\"}", parsedJson: { action: "finish" } });
+  assert.deepEqual(requests, [
+    {
+      path: "/api/llm/complete",
+      options: {
+        method: "POST",
+        body: {
+          runId: "run-99",
+          agentId: "agent-99",
+          providerConfigId: "11111111-1111-1111-1111-111111111111",
+          prompt: "choose one action",
+          responseFormat: "json",
+          maxTokens: 450
+        }
+      }
+    }
+  ]);
+});

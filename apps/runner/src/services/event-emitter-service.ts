@@ -32,6 +32,25 @@ export class EventEmitterService {
     });
   }
 
+  async completeWithLlm(input: {
+    runId: string;
+    agentId: string;
+    providerConfigId: string;
+    prompt: string;
+  }): Promise<{ text?: string; parsedJson?: unknown }> {
+    return this.api.request("/api/llm/complete", {
+      method: "POST",
+      body: {
+        runId: input.runId,
+        agentId: input.agentId,
+        providerConfigId: input.providerConfigId,
+        prompt: input.prompt,
+        responseFormat: "json",
+        maxTokens: 450
+      }
+    });
+  }
+
   async emit(input: {
     runId: string;
     agentId?: string;
