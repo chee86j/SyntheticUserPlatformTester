@@ -182,24 +182,24 @@ function renderPage(title: string, body: string): string {
   <title>${title}</title>
   <style>
     :root {
-      --bg: #050816;
-      --bg-top: #081227;
-      --card: rgba(9, 15, 34, 0.88);
-      --card-strong: rgba(12, 19, 44, 0.96);
-      --card-soft: rgba(10, 16, 38, 0.72);
-      --ink: #eff5ff;
-      --muted: #8ea1c7;
-      --line: rgba(110, 148, 221, 0.18);
-      --line-strong: rgba(110, 148, 221, 0.3);
-      --accent: #2cf6e3;
-      --accent-soft: rgba(44, 246, 227, 0.12);
-      --accent-2: #6fb8ff;
-      --accent-3: #7c6cff;
-      --success: #58ff94;
-      --warning: #ffb649;
-      --danger: #ff6b86;
-      --shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-      --glow: 0 0 0 1px rgba(51, 248, 227, 0.08), 0 0 28px rgba(24, 172, 212, 0.12);
+      --bg: #020604;
+      --bg-top: #07140d;
+      --card: rgba(4, 14, 9, 0.9);
+      --card-strong: rgba(5, 19, 12, 0.96);
+      --card-soft: rgba(4, 15, 10, 0.76);
+      --ink: #e9fff3;
+      --muted: #86a996;
+      --line: rgba(52, 255, 120, 0.18);
+      --line-strong: rgba(91, 255, 145, 0.32);
+      --accent: #39ff88;
+      --accent-soft: rgba(57, 255, 136, 0.12);
+      --accent-2: #a8ff60;
+      --accent-3: #00d46a;
+      --success: #60ff9f;
+      --warning: #f2d15b;
+      --danger: #ff5f77;
+      --shadow: 0 22px 58px rgba(0, 0, 0, 0.58);
+      --glow: 0 0 0 1px rgba(57, 255, 136, 0.12), 0 0 32px rgba(16, 255, 116, 0.12);
     }
     * { box-sizing: border-box; }
     body {
@@ -207,10 +207,9 @@ function renderPage(title: string, body: string): string {
       font-family: "Aptos", "Segoe UI Variable", "Bahnschrift", sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at 15% 18%, rgba(44, 246, 227, 0.12), transparent 18%),
-        radial-gradient(circle at 80% 12%, rgba(124, 108, 255, 0.16), transparent 22%),
-        radial-gradient(circle at 50% 120%, rgba(111, 184, 255, 0.18), transparent 35%),
-        linear-gradient(180deg, #071126 0%, #040814 48%, #030711 100%);
+        radial-gradient(circle at 14% 12%, rgba(57, 255, 136, 0.13), transparent 18%),
+        radial-gradient(circle at 82% 0%, rgba(168, 255, 96, 0.08), transparent 24%),
+        linear-gradient(180deg, #07140d 0%, #020604 46%, #000302 100%);
       min-height: 100vh;
     }
     body::before {
@@ -219,12 +218,13 @@ function renderPage(title: string, body: string): string {
       inset: 0;
       pointer-events: none;
       background:
-        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
-      background-size: 32px 32px;
-      mask-image: linear-gradient(180deg, rgba(0,0,0,0.35), transparent 88%);
+        linear-gradient(rgba(57,255,136,0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57,255,136,0.035) 1px, transparent 1px),
+        repeating-linear-gradient(180deg, rgba(57,255,136,0.035) 0 1px, transparent 1px 8px);
+      background-size: 32px 32px, 32px 32px, 100% 8px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.42), transparent 90%);
     }
-    a { color: #98caff; }
+    a { color: #9dffbf; }
     .page-shell {
       max-width: 1380px;
       margin: 0 auto;
@@ -232,11 +232,11 @@ function renderPage(title: string, body: string): string {
     }
     .hero-card, .surface-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(11, 18, 40, 0.96) 0%, rgba(6, 12, 30, 0.96) 100%);
+      background: linear-gradient(180deg, rgba(6, 21, 13, 0.96) 0%, rgba(2, 10, 6, 0.96) 100%);
       border: 1px solid var(--line);
       box-shadow: var(--shadow), var(--glow);
-      border-radius: 28px;
-      backdrop-filter: blur(18px);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
       overflow: hidden;
     }
     .hero-card::after, .surface-card::after {
@@ -244,7 +244,7 @@ function renderPage(title: string, body: string): string {
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: linear-gradient(135deg, rgba(44, 246, 227, 0.05), transparent 30%, transparent 65%, rgba(124, 108, 255, 0.05));
+      background: linear-gradient(135deg, rgba(57, 255, 136, 0.06), transparent 28%, transparent 70%, rgba(168, 255, 96, 0.04));
     }
     .hero-card { padding: 28px; margin-bottom: 22px; }
     .surface-card { padding: 24px; margin-bottom: 18px; }
@@ -253,15 +253,15 @@ function renderPage(title: string, body: string): string {
       align-items: center;
       gap: 8px;
       padding: 7px 12px;
-      border-radius: 999px;
-      background: rgba(44, 246, 227, 0.08);
+      border-radius: 4px;
+      background: rgba(57, 255, 136, 0.08);
       color: var(--accent);
       font-size: 12px;
       letter-spacing: 0.18em;
       text-transform: uppercase;
       font-weight: 700;
-      border: 1px solid rgba(44, 246, 227, 0.12);
-      box-shadow: inset 0 0 16px rgba(44, 246, 227, 0.06);
+      border: 1px solid rgba(57, 255, 136, 0.16);
+      box-shadow: inset 0 0 16px rgba(57, 255, 136, 0.05);
     }
     .hero-row, .stack-row {
       display: flex;
@@ -279,15 +279,15 @@ function renderPage(title: string, body: string): string {
     .nav-links a {
       text-decoration: none;
       padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.03);
-      color: #d8e8ff;
-      border: 1px solid rgba(111, 184, 255, 0.12);
+      border-radius: 6px;
+      background: rgba(57, 255, 136, 0.035);
+      color: #cfffe0;
+      border: 1px solid rgba(57, 255, 136, 0.13);
       transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
     .nav-links a:hover {
-      background: rgba(44, 246, 227, 0.08);
-      border-color: rgba(44, 246, 227, 0.28);
+      background: rgba(57, 255, 136, 0.1);
+      border-color: rgba(57, 255, 136, 0.34);
       transform: translateY(-1px);
     }
     .button, button, input, select, textarea {
@@ -295,21 +295,21 @@ function renderPage(title: string, body: string): string {
     }
     .button, button {
       border: 0;
-      border-radius: 16px;
-      background: linear-gradient(135deg, #10d7c2 0%, #1189d3 100%);
-      color: #03101f;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #39ff88 0%, #00b85c 100%);
+      color: #001f0f;
       padding: 10px 16px;
       cursor: pointer;
       font-weight: 700;
       letter-spacing: 0.01em;
-      box-shadow: 0 10px 24px rgba(17, 137, 211, 0.28);
+      box-shadow: 0 10px 24px rgba(0, 184, 92, 0.24);
       transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
     }
-    .button:hover, button:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(17, 137, 211, 0.35); }
+    .button:hover, button:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(0, 184, 92, 0.32); }
     button.secondary, .button.secondary {
-      background: rgba(255, 255, 255, 0.04);
+      background: rgba(57, 255, 136, 0.04);
       color: var(--ink);
-      border: 1px solid rgba(111, 184, 255, 0.16);
+      border: 1px solid rgba(57, 255, 136, 0.18);
       box-shadow: none;
     }
     button.danger, .button.danger {
@@ -320,34 +320,34 @@ function renderPage(title: string, body: string): string {
     input, select, textarea {
       width: 100%;
       padding: 12px 14px;
-      border-radius: 16px;
+      border-radius: 6px;
       border: 1px solid var(--line);
-      background: rgba(4, 9, 24, 0.78);
+      background: rgba(0, 6, 3, 0.82);
       color: var(--ink);
       margin-top: 6px;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.01);
     }
-    input::placeholder, textarea::placeholder { color: #5e7399; }
+    input::placeholder, textarea::placeholder { color: #587865; }
     input:focus, select:focus, textarea:focus {
       outline: none;
-      border-color: rgba(44, 246, 227, 0.42);
-      box-shadow: 0 0 0 3px rgba(44, 246, 227, 0.12);
+      border-color: rgba(57, 255, 136, 0.5);
+      box-shadow: 0 0 0 3px rgba(57, 255, 136, 0.13);
     }
     textarea { min-height: 100px; }
     label { display: block; font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
     h1, h2, h3 {
       margin-top: 0;
-      color: #f4f8ff;
+      color: #f1fff6;
       font-family: "Aptos Display", "Segoe UI Variable", "Trebuchet MS", sans-serif;
     }
     h1 {
       font-size: clamp(2.6rem, 5vw, 4.4rem);
       line-height: 0.96;
       margin-bottom: 12px;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.02em;
     }
-    h2 { font-size: 1.45rem; margin-bottom: 12px; letter-spacing: -0.03em; }
-    h3 { font-size: 1rem; letter-spacing: -0.02em; }
+    h2 { font-size: 1.45rem; margin-bottom: 12px; letter-spacing: -0.01em; }
+    h3 { font-size: 1rem; letter-spacing: 0; }
     p.helper, .helper { color: var(--muted); margin-top: 0; }
     .grid-2, .grid-3 {
       display: grid;
@@ -357,40 +357,40 @@ function renderPage(title: string, body: string): string {
     .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
     .flash, .error, .empty-state {
-      border-radius: 18px;
+      border-radius: 8px;
       padding: 14px 16px;
       margin-bottom: 16px;
     }
-    .flash { background: rgba(44, 246, 227, 0.08); color: var(--accent); border: 1px solid rgba(44, 246, 227, 0.18); }
+    .flash { background: rgba(57, 255, 136, 0.08); color: var(--accent); border: 1px solid rgba(57, 255, 136, 0.2); }
     .error { background: rgba(255, 107, 134, 0.1); color: #ffc1cc; border: 1px solid rgba(255, 107, 134, 0.2); }
-    .empty-state { background: rgba(255,255,255,0.03); color: var(--muted); border: 1px dashed rgba(110, 148, 221, 0.22); }
+    .empty-state { background: rgba(57,255,136,0.035); color: var(--muted); border: 1px dashed rgba(57, 255, 136, 0.24); }
     .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
     .pill {
       display: inline-flex;
       align-items: center;
       padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(111, 184, 255, 0.08);
-      color: #cae4ff;
+      border-radius: 4px;
+      background: rgba(57, 255, 136, 0.075);
+      color: #baffce;
       font-size: 12px;
       font-weight: 700;
-      border: 1px solid rgba(111, 184, 255, 0.14);
+      border: 1px solid rgba(57, 255, 136, 0.16);
     }
     .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
     .metric-box {
       padding: 16px;
-      border-radius: 20px;
-      border: 1px solid rgba(111, 184, 255, 0.12);
-      background: linear-gradient(180deg, rgba(12, 21, 48, 0.82) 0%, rgba(7, 14, 33, 0.9) 100%);
+      border-radius: 8px;
+      border: 1px solid rgba(57, 255, 136, 0.14);
+      background: linear-gradient(180deg, rgba(6, 24, 14, 0.86) 0%, rgba(2, 10, 6, 0.92) 100%);
       min-height: 112px;
     }
-    .metric-box strong { display: block; font-size: 1.8rem; margin-top: 12px; letter-spacing: -0.04em; }
+    .metric-box strong { display: block; font-size: 1.8rem; margin-top: 12px; letter-spacing: -0.01em; }
     .metric-box .helper { margin-bottom: 0; }
     .table-shell { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(111, 148, 221, 0.12); vertical-align: top; text-align: left; }
-    th { color: #67f1e5; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
-    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(111, 184, 255, 0.14); border-radius: 16px; background: rgba(255,255,255,0.03); margin-bottom: 8px; color: var(--ink); }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(57, 255, 136, 0.12); vertical-align: top; text-align: left; }
+    th { color: #6dff9c; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
+    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(57, 255, 136, 0.15); border-radius: 8px; background: rgba(57,255,136,0.035); margin-bottom: 8px; color: var(--ink); }
     .choice-list input { width: auto; margin-top: 2px; }
     .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .inline-form { display: inline; }
@@ -401,7 +401,7 @@ function renderPage(title: string, body: string): string {
     .section-kicker {
       display: inline-block;
       margin-bottom: 10px;
-      color: #67f1e5;
+      color: #6dff9c;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.22em;
@@ -416,9 +416,9 @@ function renderPage(title: string, body: string): string {
     }
     .list-item {
       padding: 16px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(111, 184, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(57,255,136,0.035);
+      border: 1px solid rgba(57, 255, 136, 0.14);
     }
     .list-item strong { font-size: 1rem; }
     .list-meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
@@ -433,17 +433,17 @@ function renderPage(title: string, body: string): string {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      border-radius: 999px;
+      border-radius: 4px;
       padding: 5px 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(111, 184, 255, 0.1);
-      color: #d7e8ff;
+      background: rgba(57,255,136,0.045);
+      border: 1px solid rgba(57, 255, 136, 0.12);
+      color: #d8ffe2;
       font-size: 12px;
     }
     .status {
       display: inline-flex;
       align-items: center;
-      border-radius: 999px;
+      border-radius: 4px;
       padding: 5px 10px;
       font-size: 11px;
       font-weight: 700;
@@ -454,7 +454,7 @@ function renderPage(title: string, body: string): string {
     .status.active { color: var(--success); background: rgba(88, 255, 148, 0.1); border-color: rgba(88, 255, 148, 0.2); }
     .status.warning { color: #ffd38d; background: rgba(255, 182, 73, 0.12); border-color: rgba(255, 182, 73, 0.2); }
     .status.danger { color: #ffc0cb; background: rgba(255, 107, 134, 0.12); border-color: rgba(255, 107, 134, 0.2); }
-    .status.info { color: #b9ddff; background: rgba(111, 184, 255, 0.12); border-color: rgba(111, 184, 255, 0.2); }
+    .status.info { color: #c9ffd7; background: rgba(57, 255, 136, 0.1); border-color: rgba(57, 255, 136, 0.2); }
     .dial-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -463,9 +463,9 @@ function renderPage(title: string, body: string): string {
     }
     .dial-card {
       padding: 16px 14px;
-      border-radius: 20px;
-      border: 1px solid rgba(111, 184, 255, 0.12);
-      background: linear-gradient(180deg, rgba(12, 20, 46, 0.9) 0%, rgba(8, 14, 32, 0.95) 100%);
+      border-radius: 8px;
+      border: 1px solid rgba(57, 255, 136, 0.14);
+      background: linear-gradient(180deg, rgba(6, 22, 13, 0.9) 0%, rgba(2, 9, 5, 0.95) 100%);
       text-align: center;
       min-height: 194px;
     }
@@ -477,14 +477,14 @@ function renderPage(title: string, body: string): string {
       display: grid;
       place-items: center;
       background:
-        radial-gradient(circle at center, rgba(6, 12, 30, 1) 58%, transparent 59%),
+        radial-gradient(circle at center, rgba(2, 9, 5, 1) 58%, transparent 59%),
         conic-gradient(var(--dial-color, var(--accent)) 0 var(--progress, 72%), rgba(255,255,255,0.08) var(--progress, 72%) 100%);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 0 18px color-mix(in srgb, var(--dial-color, var(--accent)) 22%, transparent);
     }
     .dial-ring span {
       font-size: 1.45rem;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.01em;
     }
     .dial-card strong {
       display: block;
@@ -504,14 +504,14 @@ function renderPage(title: string, body: string): string {
     }
     .hero-accent {
       color: var(--accent);
-      text-shadow: 0 0 18px rgba(44, 246, 227, 0.22);
+      text-shadow: 0 0 18px rgba(57, 255, 136, 0.28);
     }
     .toolbar-note {
       min-width: 220px;
       padding: 14px 16px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(111, 184, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(57,255,136,0.035);
+      border: 1px solid rgba(57, 255, 136, 0.13);
     }
     .toolbar-note strong {
       display: block;
@@ -520,13 +520,13 @@ function renderPage(title: string, body: string): string {
     }
     code {
       padding: 2px 6px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.06);
-      color: #cbf5ff;
+      border-radius: 4px;
+      background: rgba(57,255,136,0.08);
+      color: #caffd8;
     }
     @media (max-width: 720px) {
       .page-shell { padding: 18px 12px 48px; }
-      .hero-card, .surface-card { padding: 18px; border-radius: 22px; }
+      .hero-card, .surface-card { padding: 18px; border-radius: 10px; }
       h1 { font-size: 2.4rem; }
     }
     @media (max-width: 980px) {
@@ -674,16 +674,16 @@ function shellNav(user: CurrentUser): string {
   return `<div class="hero-card">
     <div class="hero-row">
       <div>
-        <div class="eyebrow">Live · Synthetic Control</div>
+        <div class="eyebrow">Live Matrix · Synthetic Control</div>
         <div class="hero-title-line">
-          <h1>Synthetic <span class="hero-accent">User</span> Dashboard</h1>
+          <h1>Validation <span class="hero-accent">Matrix</span></h1>
         </div>
         <p class="helper">${esc(user.name)} · ${esc(user.role)} · Org ${esc(user.organizationId)}</p>
       </div>
       <div class="toolbar-note">
-        <span class="section-kicker">Session State</span>
-        <strong>Realtime control surface</strong>
-        <p class="helper" style="margin-bottom:0;">Projects, accounts, workflows, and live run orchestration in one shell.</p>
+        <span class="section-kicker">Signal State</span>
+        <strong>Release evidence console</strong>
+        <p class="helper" style="margin-bottom:0;">Targets, personas, accounts, run activity, and report artifacts in one controlled loop.</p>
       </div>
     </div>
     <div class="hero-row" style="margin-top:20px;align-items:center;">
@@ -700,9 +700,9 @@ function shellNav(user: CurrentUser): string {
         </form>
       </div>
       <div class="pill-row">
-        <span class="pill">dark ops theme</span>
-        <span class="pill">multi-agent ready</span>
-        <span class="pill">localhost safe</span>
+        <span class="pill">scoped network</span>
+        <span class="pill">multi-agent runs</span>
+        <span class="pill">artifact trail</span>
       </div>
     </div>
   </div>`;
@@ -714,14 +714,14 @@ function renderLogin(error?: string): string {
     `<div class="hero-card">
       <div class="hero-row">
         <div>
-          <div class="eyebrow">Live · 20 agents · local stack</div>
-          <h1>Simulation <span class="hero-accent">Command</span></h1>
-          <p class="helper">Use the operator dashboard to aim synthetic users at your local app, watch live activity, and inspect the run report.</p>
+          <div class="eyebrow">Simulation Matrix · Local Stack</div>
+          <h1>Release <span class="hero-accent">Signal</span></h1>
+          <p class="helper">Aim synthetic users at a controlled target, watch workflow evidence arrive, and inspect the report before a release decision.</p>
         </div>
         <div class="dial-grid" style="flex:1;min-width:min(100%,540px);margin-top:0;">
-          ${renderDialCard("Engagement", 82, "#2cf6e3", "active sessions")}
-          ${renderDialCard("Coverage", 87, "#ff71c8", "workflow reach")}
-          ${renderDialCard("Responsiveness", 91, "#58ff94", "local orchestration")}
+          ${renderDialCard("Readiness", 82, "#39ff88", "operator access")}
+          ${renderDialCard("Scope", 87, "#a8ff60", "network guardrails")}
+          ${renderDialCard("Evidence", 91, "#60ff9f", "reports + artifacts")}
         </div>
       </div>
     </div>
@@ -826,9 +826,9 @@ ${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
     </div>
   </div>
   <div class="dial-grid">
-    ${renderDialCard("Project coverage", percent(attachedProjectCount, Math.max(projects.length, 1)), "#2cf6e3", "projects wired to targets")}
+    ${renderDialCard("Project coverage", percent(attachedProjectCount, Math.max(projects.length, 1)), "#39ff88", "projects wired to targets")}
     ${renderDialCard("Active targets", percent(activeEnvironmentCount, Math.max(allEnvironments.length, 1)), "#58ff94", "environments marked active")}
-    ${renderDialCard("Local routing", percent(localEnvironmentCount, Math.max(allEnvironments.length, 1)), "#6fb8ff", "localhost or 127.0.0.1")}
+    ${renderDialCard("Local routing", percent(localEnvironmentCount, Math.max(allEnvironments.length, 1)), "#a8ff60", "localhost or 127.0.0.1")}
     ${renderDialCard("Ready signal", percent(readyEnvironmentCount, Math.max(allEnvironments.length, 1)), "#ffb649", "active and local")}
   </div>
 </div>
@@ -957,6 +957,53 @@ function renderRunDetailPage(args: {
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+<style>
+  #run-dashboard-root [class*="bg-white"],
+  #run-dashboard-root [class*="bg-slate-50"] {
+    background-color: rgba(3, 14, 8, 0.94) !important;
+  }
+  #run-dashboard-root [class*="bg-emerald-50"],
+  #run-dashboard-root [class*="bg-teal-50"],
+  #run-dashboard-root [class*="bg-amber-50"] {
+    background-color: rgba(57, 255, 136, 0.09) !important;
+  }
+  #run-dashboard-root [class*="bg-rose-50"] {
+    background-color: rgba(255, 95, 119, 0.1) !important;
+  }
+  #run-dashboard-root [class*="bg-slate-100"] {
+    background-color: rgba(57, 255, 136, 0.1) !important;
+  }
+  #run-dashboard-root [class*="border-slate"],
+  #run-dashboard-root [class*="border-emerald"],
+  #run-dashboard-root [class*="border-teal"] {
+    border-color: rgba(57, 255, 136, 0.18) !important;
+  }
+  #run-dashboard-root [class*="text-slate-900"],
+  #run-dashboard-root [class*="text-slate-800"],
+  #run-dashboard-root [class*="text-slate-700"],
+  #run-dashboard-root [class*="text-emerald-900"],
+  #run-dashboard-root [class*="text-emerald-800"] {
+    color: #e9fff3 !important;
+  }
+  #run-dashboard-root [class*="text-slate-600"],
+  #run-dashboard-root [class*="text-slate-500"] {
+    color: #86a996 !important;
+  }
+  #run-dashboard-root [class*="text-teal-700"],
+  #run-dashboard-root [class*="hover:text-teal-700"]:hover {
+    color: #39ff88 !important;
+  }
+  #run-dashboard-root [class*="bg-emerald-700"] {
+    background-color: #00b85c !important;
+    color: #001f0f !important;
+  }
+  #run-dashboard-root .recharts-cartesian-grid line {
+    stroke: rgba(57, 255, 136, 0.12);
+  }
+  #run-dashboard-root .recharts-text {
+    fill: #86a996;
+  }
+</style>
 ${shellNav(args.user)}
 ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
 ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
@@ -980,8 +1027,8 @@ ${args.error ? `<div class="error">${esc(args.error)}</div>` : ""}
     <span class="pill">Artifacts + report</span>
   </div>
   <div class="dial-grid">
-    ${renderDialCard("Actions", 78, "#2cf6e3", "total interactions")}
-    ${renderDialCard("Active", 64, "#6fb8ff", "agents in motion")}
+    ${renderDialCard("Actions", 78, "#39ff88", "total interactions")}
+    ${renderDialCard("Active", 64, "#a8ff60", "agents in motion")}
     ${renderDialCard("Findings", 52, "#ffb649", "issues surfaced")}
     ${renderDialCard("Frustration", 38, "#ff6b86", "current stress")}
   </div>
@@ -1382,7 +1429,7 @@ function renderTestAccountsPage(
     ${renderDialCard("Available", percent(availableCount, Math.max(accounts.length, 1)), "#58ff94", "ready for agents")}
     ${renderDialCard("Reserved", percent(reservedCount, Math.max(accounts.length, 1)), "#ffb649", "currently in use")}
     ${renderDialCard("Disabled", percent(disabledCount, Math.max(accounts.length, 1)), "#ff6b86", "blocked from runs")}
-    ${renderDialCard("Shared use", percent(concurrentCount, Math.max(accounts.length, 1)), "#6fb8ff", "concurrent enabled")}
+    ${renderDialCard("Shared use", percent(concurrentCount, Math.max(accounts.length, 1)), "#a8ff60", "concurrent enabled")}
   </div>
 </div>
 <div class="panel-grid">
@@ -1578,7 +1625,7 @@ ${flash ? `<div class="flash">${esc(flash)}</div>` : ""}
       <div class="page-actions" style="align-self:end;"><button type="submit">Load</button></div>
     </form>
     <div class="dial-grid">
-      ${renderDialCard("Workflows", percent(workflows.length, Math.max(workflows.length, 1)), "#2cf6e3", "defined goals")}
+      ${renderDialCard("Workflows", percent(workflows.length, Math.max(workflows.length, 1)), "#39ff88", "defined goals")}
       ${renderDialCard("Active", percent(workflows.filter((workflow) => workflow.status === "ACTIVE").length, Math.max(workflows.length, 1)), "#58ff94", "ready to run")}
       ${renderDialCard("Drafts", percent(workflows.filter((workflow) => workflow.status === "DRAFT").length, Math.max(workflows.length, 1)), "#ffb649", "still being shaped")}
     </div>
