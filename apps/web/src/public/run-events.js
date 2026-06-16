@@ -31,6 +31,34 @@ function deriveRunStatus(events) {
   return "Pending";
 }
 
+function deriveActiveAgents(events) {
+  const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const statusByAgent = new Map();
+
+  for (const event of sorted) {
+    if (!event.agentId) continue;
+    if (event.eventType === "agent.started") statusByAgent.set(event.agentId, "active");
+    if (event.eventType === "agent.completed") statusByAgent.set(event.agentId, "completed");
+    if (event.eventType === "agent.failed") statusByAgent.set(event.agentId, "failed");
+    if (event.eventType === "agent.cancelled") statusByAgent.set(event.agentId, "cancelled");
+  }
+
+  return [...statusByAgent.entries()]
+    .filter(([, status]) => status === "active")
+    .map(([agentId]) => agentId)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function publishNexusAgents(events) {
+  window.dispatchEvent(
+    new CustomEvent("nexus:agents", {
+      detail: {
+        activeAgents: deriveActiveAgents(events)
+      }
+    })
+  );
+}
+
 function buildDashboard(events) {
   const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const totalActions = sorted.filter((event) => event.eventType.startsWith("action.")).length;
@@ -269,6 +297,10 @@ function DashboardApp({ config }) {
   const { events, artifacts, findings, budgetSummary, loading, error } = useRunData(config);
   const dashboard = React.useMemo(() => buildDashboard(events), [events]);
   const rc = Recharts;
+
+  React.useEffect(() => {
+    publishNexusAgents(events);
+  }, [events]);
 
   const [selectedAgentId, setSelectedAgentId] = React.useState(null);
   React.useEffect(() => {

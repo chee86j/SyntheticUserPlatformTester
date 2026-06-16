@@ -1,6 +1,14 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const envBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().min(1).max(65535),
@@ -9,8 +17,8 @@ const envSchema = z.object({
   AUTH_JWT_SECRET: z.string().min(32, "AUTH_JWT_SECRET must be at least 32 chars"),
   AUTH_COOKIE_NAME: z.string().min(1).default("sup_session"),
   WEB_ORIGIN: z.string().url("WEB_ORIGIN must be a valid URL"),
-  OTEL_ENABLED: z.coerce.boolean().default(false),
-  OTEL_CONSOLE_EXPORT_ENABLED: z.coerce.boolean().default(false),
+  OTEL_ENABLED: envBoolean.default(false),
+  OTEL_CONSOLE_EXPORT_ENABLED: envBoolean.default(false),
   OTEL_METRIC_EXPORT_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(5000),
   TEST_ACCOUNT_ENCRYPTION_KEY: z
     .string()

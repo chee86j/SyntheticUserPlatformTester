@@ -182,24 +182,24 @@ function renderPage(title: string, body: string): string {
   <title>${title}</title>
   <style>
     :root {
-      --bg: #020604;
-      --bg-top: #07140d;
-      --card: rgba(4, 14, 9, 0.9);
-      --card-strong: rgba(5, 19, 12, 0.96);
-      --card-soft: rgba(4, 15, 10, 0.76);
-      --ink: #e9fff3;
-      --muted: #86a996;
-      --line: rgba(52, 255, 120, 0.18);
-      --line-strong: rgba(91, 255, 145, 0.32);
+      --bg: #010403;
+      --bg-top: #03110a;
+      --card: rgba(3, 12, 8, 0.78);
+      --card-strong: rgba(4, 16, 10, 0.9);
+      --card-soft: rgba(3, 14, 9, 0.58);
+      --ink: #effff5;
+      --muted: #91ad9d;
+      --line: rgba(57, 255, 136, 0.14);
+      --line-strong: rgba(94, 255, 150, 0.28);
       --accent: #39ff88;
       --accent-soft: rgba(57, 255, 136, 0.12);
-      --accent-2: #a8ff60;
+      --accent-2: #65b7ff;
       --accent-3: #00d46a;
       --success: #60ff9f;
       --warning: #f2d15b;
       --danger: #ff5f77;
-      --shadow: 0 22px 58px rgba(0, 0, 0, 0.58);
-      --glow: 0 0 0 1px rgba(57, 255, 136, 0.12), 0 0 32px rgba(16, 255, 116, 0.12);
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+      --glow: 0 0 0 1px rgba(57, 255, 136, 0.08), 0 0 28px rgba(57, 255, 136, 0.09);
     }
     * { box-sizing: border-box; }
     body {
@@ -207,9 +207,8 @@ function renderPage(title: string, body: string): string {
       font-family: "Aptos", "Segoe UI Variable", "Bahnschrift", sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at 14% 12%, rgba(57, 255, 136, 0.13), transparent 18%),
-        radial-gradient(circle at 82% 0%, rgba(168, 255, 96, 0.08), transparent 24%),
-        linear-gradient(180deg, #07140d 0%, #020604 46%, #000302 100%);
+        linear-gradient(180deg, #03110a 0%, #010403 52%, #000201 100%),
+        repeating-linear-gradient(90deg, rgba(57,255,136,0.035) 0 1px, transparent 1px 58px);
       min-height: 100vh;
     }
     body::before {
@@ -218,11 +217,11 @@ function renderPage(title: string, body: string): string {
       inset: 0;
       pointer-events: none;
       background:
-        linear-gradient(rgba(57,255,136,0.055) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(57,255,136,0.035) 1px, transparent 1px),
-        repeating-linear-gradient(180deg, rgba(57,255,136,0.035) 0 1px, transparent 1px 8px);
-      background-size: 32px 32px, 32px 32px, 100% 8px;
-      mask-image: linear-gradient(180deg, rgba(0,0,0,0.42), transparent 90%);
+        repeating-linear-gradient(180deg, rgba(57,255,136,0.052) 0 1px, transparent 1px 10px),
+        linear-gradient(90deg, transparent 0 8%, rgba(57,255,136,0.045) 8.1% 8.3%, transparent 8.4% 100%);
+      background-size: 100% 10px, 180px 100%;
+      opacity: 0.7;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.52), transparent 92%);
     }
     a { color: #9dffbf; }
     .page-shell {
@@ -232,10 +231,10 @@ function renderPage(title: string, body: string): string {
     }
     .hero-card, .surface-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(6, 21, 13, 0.96) 0%, rgba(2, 10, 6, 0.96) 100%);
+      background: linear-gradient(180deg, rgba(4, 16, 10, 0.84) 0%, rgba(1, 8, 5, 0.9) 100%);
       border: 1px solid var(--line);
       box-shadow: var(--shadow), var(--glow);
-      border-radius: 12px;
+      border-radius: 8px;
       backdrop-filter: blur(12px);
       overflow: hidden;
     }
@@ -244,7 +243,7 @@ function renderPage(title: string, body: string): string {
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: linear-gradient(135deg, rgba(57, 255, 136, 0.06), transparent 28%, transparent 70%, rgba(168, 255, 96, 0.04));
+      background: linear-gradient(135deg, rgba(57, 255, 136, 0.035), transparent 38%, transparent 76%, rgba(101, 183, 255, 0.035));
     }
     .hero-card { padding: 28px; margin-bottom: 22px; }
     .surface-card { padding: 24px; margin-bottom: 18px; }
@@ -279,7 +278,7 @@ function renderPage(title: string, body: string): string {
     .nav-links a {
       text-decoration: none;
       padding: 10px 14px;
-      border-radius: 6px;
+      border-radius: 4px;
       background: rgba(57, 255, 136, 0.035);
       color: #cfffe0;
       border: 1px solid rgba(57, 255, 136, 0.13);
@@ -295,7 +294,7 @@ function renderPage(title: string, body: string): string {
     }
     .button, button {
       border: 0;
-      border-radius: 6px;
+      border-radius: 4px;
       background: linear-gradient(135deg, #39ff88 0%, #00b85c 100%);
       color: #001f0f;
       padding: 10px 16px;
@@ -320,7 +319,7 @@ function renderPage(title: string, body: string): string {
     input, select, textarea {
       width: 100%;
       padding: 12px 14px;
-      border-radius: 6px;
+      border-radius: 4px;
       border: 1px solid var(--line);
       background: rgba(0, 6, 3, 0.82);
       color: var(--ink);
@@ -341,12 +340,12 @@ function renderPage(title: string, body: string): string {
       font-family: "Aptos Display", "Segoe UI Variable", "Trebuchet MS", sans-serif;
     }
     h1 {
-      font-size: clamp(2.6rem, 5vw, 4.4rem);
+      font-size: 3.8rem;
       line-height: 0.96;
       margin-bottom: 12px;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
     }
-    h2 { font-size: 1.45rem; margin-bottom: 12px; letter-spacing: -0.01em; }
+    h2 { font-size: 1.45rem; margin-bottom: 12px; letter-spacing: 0; }
     h3 { font-size: 1rem; letter-spacing: 0; }
     p.helper, .helper { color: var(--muted); margin-top: 0; }
     .grid-2, .grid-3 {
@@ -357,7 +356,7 @@ function renderPage(title: string, body: string): string {
     .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
     .flash, .error, .empty-state {
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 14px 16px;
       margin-bottom: 16px;
     }
@@ -379,7 +378,7 @@ function renderPage(title: string, body: string): string {
     .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
     .metric-box {
       padding: 16px;
-      border-radius: 8px;
+      border-radius: 6px;
       border: 1px solid rgba(57, 255, 136, 0.14);
       background: linear-gradient(180deg, rgba(6, 24, 14, 0.86) 0%, rgba(2, 10, 6, 0.92) 100%);
       min-height: 112px;
@@ -390,7 +389,7 @@ function renderPage(title: string, body: string): string {
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 12px 10px; border-bottom: 1px solid rgba(57, 255, 136, 0.12); vertical-align: top; text-align: left; }
     th { color: #6dff9c; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
-    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(57, 255, 136, 0.15); border-radius: 8px; background: rgba(57,255,136,0.035); margin-bottom: 8px; color: var(--ink); }
+    .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(57, 255, 136, 0.15); border-radius: 6px; background: rgba(57,255,136,0.035); margin-bottom: 8px; color: var(--ink); }
     .choice-list input { width: auto; margin-top: 2px; }
     .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .inline-form { display: inline; }
@@ -416,7 +415,7 @@ function renderPage(title: string, body: string): string {
     }
     .list-item {
       padding: 16px;
-      border-radius: 8px;
+      border-radius: 6px;
       background: rgba(57,255,136,0.035);
       border: 1px solid rgba(57, 255, 136, 0.14);
     }
@@ -463,7 +462,7 @@ function renderPage(title: string, body: string): string {
     }
     .dial-card {
       padding: 16px 14px;
-      border-radius: 8px;
+      border-radius: 6px;
       border: 1px solid rgba(57, 255, 136, 0.14);
       background: linear-gradient(180deg, rgba(6, 22, 13, 0.9) 0%, rgba(2, 9, 5, 0.95) 100%);
       text-align: center;
@@ -509,7 +508,7 @@ function renderPage(title: string, body: string): string {
     .toolbar-note {
       min-width: 220px;
       padding: 14px 16px;
-      border-radius: 8px;
+      border-radius: 6px;
       background: rgba(57,255,136,0.035);
       border: 1px solid rgba(57, 255, 136, 0.13);
     }
@@ -524,13 +523,131 @@ function renderPage(title: string, body: string): string {
       background: rgba(57,255,136,0.08);
       color: #caffd8;
     }
+    .nexus-shell {
+      position: relative;
+      min-height: 520px;
+      display: grid;
+      grid-template-columns: minmax(320px, 0.82fr) minmax(420px, 1.18fr);
+      gap: 20px;
+      align-items: stretch;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(57, 255, 136, 0.16);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(4, 16, 10, 0.72), rgba(1, 6, 4, 0.92)),
+        repeating-linear-gradient(90deg, rgba(57,255,136,0.03) 0 1px, transparent 1px 84px);
+      box-shadow: var(--shadow), 0 0 44px rgba(57, 255, 136, 0.08);
+      overflow: hidden;
+    }
+    .nexus-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 0 24%, rgba(57,255,136,0.05) 24.2% 24.4%, transparent 24.6% 100%),
+        repeating-linear-gradient(180deg, transparent 0 28px, rgba(57,255,136,0.045) 29px 30px);
+      opacity: 0.52;
+    }
+    .nexus-copy, .nexus-stage {
+      position: relative;
+      z-index: 1;
+    }
+    .nexus-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 22px;
+      min-width: 0;
+    }
+    .nexus-title {
+      font-size: 4.15rem;
+      line-height: 0.92;
+      margin: 8px 0 14px;
+      letter-spacing: 0;
+    }
+    .nexus-title span {
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(57, 255, 136, 0.24);
+    }
+    .nexus-subcopy {
+      max-width: 540px;
+      color: #a9c2b3;
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+    .nexus-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .nexus-stat {
+      min-height: 94px;
+      padding: 14px;
+      border: 1px solid rgba(57, 255, 136, 0.14);
+      border-radius: 6px;
+      background: rgba(0, 8, 5, 0.48);
+    }
+    .nexus-stat strong {
+      display: block;
+      margin-top: 8px;
+      color: #f0fff5;
+      font-size: 1.55rem;
+      letter-spacing: 0;
+    }
+    .nexus-stage {
+      min-height: 480px;
+      border: 1px solid rgba(57, 255, 136, 0.11);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(0, 10, 6, 0.24), rgba(0, 3, 2, 0.64)),
+        repeating-linear-gradient(0deg, transparent 0 34px, rgba(57,255,136,0.035) 35px 36px);
+      overflow: hidden;
+    }
+    .nexus-scene {
+      width: 100%;
+      height: 100%;
+      min-height: 480px;
+      cursor: grab;
+      touch-action: none;
+    }
+    .nexus-scene:active { cursor: grabbing; }
+    .nexus-scene canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .nexus-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .nexus-nav {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(57, 255, 136, 0.12);
+    }
+    .nexus-nav .nav-links a {
+      background: transparent;
+      border-color: rgba(57, 255, 136, 0.11);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body::before, .nexus-shell::before { opacity: 0.28; }
+      .button, button, .nav-links a { transition: none; }
+    }
     @media (max-width: 720px) {
       .page-shell { padding: 18px 12px 48px; }
-      .hero-card, .surface-card { padding: 18px; border-radius: 10px; }
-      h1 { font-size: 2.4rem; }
+      .hero-card, .surface-card { padding: 18px; border-radius: 8px; }
+      h1, .nexus-title { font-size: 2.55rem; }
+      .nexus-stats { grid-template-columns: 1fr; }
+      .nexus-shell { padding: 12px; }
+      .nexus-stage, .nexus-scene { min-height: 360px; }
     }
     @media (max-width: 980px) {
       .panel-grid { grid-template-columns: 1fr; }
+      .nexus-shell { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -556,6 +673,7 @@ function renderPage(title: string, body: string): string {
       });
     });
   </script>
+  <script type="module" src="/static/nexus-scene.js"></script>
 </body>
 </html>`;
 }
@@ -671,23 +789,25 @@ function renderMetricBox(label: string, value: string | number, detail: string):
 }
 
 function shellNav(user: CurrentUser): string {
-  return `<div class="hero-card">
-    <div class="hero-row">
+  return `<section class="nexus-shell" aria-labelledby="nexus-title">
+    <div class="nexus-copy">
       <div>
-        <div class="eyebrow">Live Matrix · Synthetic Control</div>
-        <div class="hero-title-line">
-          <h1>Validation <span class="hero-accent">Matrix</span></h1>
+        <div class="eyebrow">Nexus View · Live graph</div>
+        <h1 id="nexus-title" class="nexus-title">Nexus <span>View</span></h1>
+        <p class="nexus-subcopy">${esc(user.name)} is connected as ${esc(user.role)}. Personas, accounts, workflows, and active runs appear as one living validation network.</p>
+        <div class="nexus-strip">
+          <span class="pill">consumer-clean</span>
+          <span class="pill">network-native</span>
+          <span class="pill">release signal</span>
         </div>
-        <p class="helper">${esc(user.name)} · ${esc(user.role)} · Org ${esc(user.organizationId)}</p>
       </div>
-      <div class="toolbar-note">
-        <span class="section-kicker">Signal State</span>
-        <strong>Release evidence console</strong>
-        <p class="helper" style="margin-bottom:0;">Targets, personas, accounts, run activity, and report artifacts in one controlled loop.</p>
+      <div class="nexus-stats" aria-label="Network summary">
+        <div class="nexus-stat"><span class="section-kicker">Connected</span><strong>128</strong><span class="helper">people and test identities</span></div>
+        <div class="nexus-stat"><span class="section-kicker">Live Now</span><strong>24</strong><span class="helper">agents and operators</span></div>
+        <div class="nexus-stat"><span class="section-kicker">Signals</span><strong>3</strong><span class="helper">runs, reports, findings</span></div>
       </div>
-    </div>
-    <div class="hero-row" style="margin-top:20px;align-items:center;">
-      <div class="nav-links">
+      <div class="nexus-nav">
+        <div class="nav-links">
         <a href="/dashboard/projects">Projects</a>
         <a href="/dashboard/personas">Personas</a>
         <a href="/dashboard/test-accounts">Test Accounts</a>
@@ -699,32 +819,34 @@ function shellNav(user: CurrentUser): string {
           <button type="submit" class="secondary" data-loading-text="Signing out...">Log out</button>
         </form>
       </div>
-      <div class="pill-row">
-        <span class="pill">scoped network</span>
-        <span class="pill">multi-agent runs</span>
-        <span class="pill">artifact trail</span>
       </div>
     </div>
-  </div>`;
+    <div class="nexus-stage">
+      <div class="nexus-scene" data-nexus-scene data-connected="128" data-live="24" role="img"></div>
+    </div>
+  </section>`;
 }
 
 function renderLogin(error?: string): string {
   return renderPage(
     "Platform Login",
-    `<div class="hero-card">
-      <div class="hero-row">
+    `<section class="nexus-shell" aria-labelledby="login-nexus-title">
+      <div class="nexus-copy">
         <div>
-          <div class="eyebrow">Simulation Matrix · Local Stack</div>
-          <h1>Release <span class="hero-accent">Signal</span></h1>
-          <p class="helper">Aim synthetic users at a controlled target, watch workflow evidence arrive, and inspect the report before a release decision.</p>
+          <div class="eyebrow">Synthetic User Platform</div>
+          <h1 id="login-nexus-title" class="nexus-title">Nexus <span>Access</span></h1>
+          <p class="nexus-subcopy">A living validation graph for synthetic beta testers, workflow evidence, and release confidence.</p>
         </div>
-        <div class="dial-grid" style="flex:1;min-width:min(100%,540px);margin-top:0;">
-          ${renderDialCard("Readiness", 82, "#39ff88", "operator access")}
-          ${renderDialCard("Scope", 87, "#a8ff60", "network guardrails")}
-          ${renderDialCard("Evidence", 91, "#60ff9f", "reports + artifacts")}
+        <div class="nexus-stats">
+          <div class="nexus-stat"><span class="section-kicker">Readiness</span><strong>82%</strong><span class="helper">operator access</span></div>
+          <div class="nexus-stat"><span class="section-kicker">Scope</span><strong>87%</strong><span class="helper">network guardrails</span></div>
+          <div class="nexus-stat"><span class="section-kicker">Evidence</span><strong>91%</strong><span class="helper">reports and artifacts</span></div>
         </div>
       </div>
-    </div>
+      <div class="nexus-stage">
+        <div class="nexus-scene" data-nexus-scene data-connected="96" data-live="12" role="img"></div>
+      </div>
+    </section>
     <div class="surface-card" style="max-width:560px;margin:0 auto;">
       <span class="section-kicker">Operator Access</span>
       <h2>Dashboard Login</h2>
@@ -956,7 +1078,8 @@ function renderRunDetailPage(args: {
     `<script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
 <style>
   #run-dashboard-root [class*="bg-white"],
   #run-dashboard-root [class*="bg-slate-50"] {
@@ -1731,7 +1854,12 @@ function renderLlmProvidersPage(
 <td>${renderStatusBadge(config.status)}</td>
 <td>${esc(config.lastCheckedAt ? new Date(config.lastCheckedAt).toLocaleString() : "-")}</td>
 <td style="max-width:220px;">${esc(config.lastError ?? "-")}</td>
-<td><form method="post" action="/dashboard/llm-providers/${config.id}/test" class="inline-form"><button type="submit">Test Connection</button></form></td>
+<td>
+  <div class="action-row" style="margin-top:0;">
+    <form method="post" action="/dashboard/llm-providers/${config.id}/test" class="inline-form"><button type="submit">Test Connection</button></form>
+    <form method="post" action="/dashboard/llm-providers/${config.id}/remove" class="inline-form" onsubmit="return window.confirm('Remove this provider connection?');"><button type="submit" class="danger">Remove Connection</button></form>
+  </div>
+</td>
 </tr>`
     )
     .join("\n");
@@ -1815,6 +1943,17 @@ app.post("/dashboard/llm-providers/:configId/test", async (req, res) => {
 
   if (!response?.ok) return void res.redirect("/dashboard/llm-providers?error=Provider+test+failed");
   res.redirect("/dashboard/llm-providers?flash=Provider+connection+successful");
+});
+
+app.post("/dashboard/llm-providers/:configId/remove", async (req, res) => {
+  const response = await apiRequest(req.headers.cookie, `/api/llm/providers/${req.params.configId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ status: "inactive", isActive: false })
+  });
+
+  if (!response) return void res.redirect("/dashboard/llm-providers?error=Unable+to+remove+provider");
+  res.redirect("/dashboard/llm-providers?flash=Provider+connection+removed");
 });
 
 
