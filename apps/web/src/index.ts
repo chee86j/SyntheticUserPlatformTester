@@ -802,9 +802,9 @@ function shellNav(user: CurrentUser): string {
         </div>
       </div>
       <div class="nexus-stats" aria-label="Network summary">
-        <div class="nexus-stat"><span class="section-kicker">Connected</span><strong>128</strong><span class="helper">people and test identities</span></div>
-        <div class="nexus-stat"><span class="section-kicker">Live Now</span><strong>24</strong><span class="helper">agents and operators</span></div>
-        <div class="nexus-stat"><span class="section-kicker">Signals</span><strong>3</strong><span class="helper">runs, reports, findings</span></div>
+        <div class="nexus-stat"><span class="section-kicker">Connected</span><strong data-nexus-connected-value>128</strong><span class="helper">people and test identities</span></div>
+        <div class="nexus-stat"><span class="section-kicker">Live Now</span><strong data-nexus-live-value>0</strong><span class="helper">agents currently moving</span></div>
+        <div class="nexus-stat"><span class="section-kicker">Signals</span><strong data-nexus-signal-value>0</strong><span class="helper">events in the active run</span></div>
       </div>
       <div class="nexus-nav">
         <div class="nav-links">
@@ -822,7 +822,7 @@ function shellNav(user: CurrentUser): string {
       </div>
     </div>
     <div class="nexus-stage">
-      <div class="nexus-scene" data-nexus-scene data-connected="128" data-live="24" role="img"></div>
+      <div class="nexus-scene" data-nexus-scene data-connected="128" data-live="0" role="img"></div>
     </div>
   </section>`;
 }

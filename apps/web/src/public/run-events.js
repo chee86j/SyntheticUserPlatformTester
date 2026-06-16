@@ -49,12 +49,24 @@ function deriveActiveAgents(events) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function deriveNexusSummary(events) {
+  const activeAgents = deriveActiveAgents(events);
+  const totalAgents = new Set(events.filter((event) => event.agentId).map((event) => event.agentId)).size;
+
+  return {
+    activeAgents,
+    activeAgentsCount: activeAgents.length,
+    totalAgents,
+    eventCount: events.length,
+    runStatus: deriveRunStatus(events)
+  };
+}
+
 function publishNexusAgents(events) {
+  const summary = deriveNexusSummary(events);
   window.dispatchEvent(
     new CustomEvent("nexus:agents", {
-      detail: {
-        activeAgents: deriveActiveAgents(events)
-      }
+      detail: summary
     })
   );
 }
@@ -76,6 +88,7 @@ function buildDashboard(events) {
     if (event.eventType === "agent.started") statusByAgent.set(event.agentId, "active");
     if (event.eventType === "agent.completed") statusByAgent.set(event.agentId, "completed");
     if (event.eventType === "agent.failed") statusByAgent.set(event.agentId, "failed");
+    if (event.eventType === "agent.cancelled") statusByAgent.set(event.agentId, "cancelled");
   }
 
   const agentRows = [...new Set([...statusByAgent.keys(), ...actionCountByAgent.keys(), ...lastEventByAgent.keys()])]

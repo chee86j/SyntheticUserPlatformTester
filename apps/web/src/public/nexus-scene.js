@@ -1,20 +1,10 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const agentPalette = [
-  0x39ff88,
-  0x65b7ff,
-  0xf2d15b,
-  0xff6f91,
-  0xa8ff60,
-  0x00d4ff,
-  0xff9f43,
-  0xc084fc,
-  0x5cffc9,
-  0xfff4a3,
-  0x7dd3fc,
-  0xf472b6
-];
+const assignedAgentColors = new Map();
+const assignedAgentHues = new Map();
+const minimumHueDistance = 0.055;
+const goldenRatioConjugate = 0.61803398875;
 
 function hashString(value) {
   let hash = 2166136261;
@@ -25,8 +15,50 @@ function hashString(value) {
   return hash >>> 0;
 }
 
-function colorForAgent(agentId, index) {
-  return agentPalette[index % agentPalette.length] ?? agentPalette[hashString(agentId) % agentPalette.length];
+function hueDistance(left, right) {
+  const distance = Math.abs(left - right);
+  return Math.min(distance, 1 - distance);
+}
+
+function hslToHex(hue, saturation, lightness) {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = chroma * (1 - Math.abs(((hue * 6) % 2) - 1));
+  const match = lightness - chroma / 2;
+  const sector = Math.floor(hue * 6);
+  const [r1, g1, b1] =
+    sector === 0
+      ? [chroma, x, 0]
+      : sector === 1
+        ? [x, chroma, 0]
+        : sector === 2
+          ? [0, chroma, x]
+          : sector === 3
+            ? [0, x, chroma]
+            : sector === 4
+              ? [x, 0, chroma]
+              : [chroma, 0, x];
+  const r = Math.round((r1 + match) * 255);
+  const g = Math.round((g1 + match) * 255);
+  const b = Math.round((b1 + match) * 255);
+  return (r << 16) + (g << 8) + b;
+}
+
+function colorForAgent(agentId) {
+  if (assignedAgentColors.has(agentId)) return assignedAgentColors.get(agentId);
+
+  let hue = (hashString(agentId) % 360) / 360;
+  const usedHues = [...assignedAgentHues.values()];
+  let attempts = 0;
+
+  while (usedHues.some((usedHue) => hueDistance(hue, usedHue) < minimumHueDistance) && attempts < 24) {
+    hue = (hue + goldenRatioConjugate) % 1;
+    attempts += 1;
+  }
+
+  const color = hslToHex(hue, 0.82, 0.62);
+  assignedAgentHues.set(agentId, hue);
+  assignedAgentColors.set(agentId, color);
+  return color;
 }
 
 function deriveActiveAgentsFromEvents(events) {
@@ -157,7 +189,34 @@ function mountNexusScene(container) {
     return nodeIndex;
   }
 
-  function updateAgentNodes(nextActiveAgents) {
+  function updateNexusCounters(summary) {
+    const hasRunConfig = Boolean(window.__RUN_EVENTS_CONFIG__);
+    const totalAgents = Number.isFinite(summary?.totalAgents) ? summary.totalAgents : connected;
+    const activeCount = Number.isFinite(summary?.activeAgentsCount)
+      ? summary.activeAgentsCount
+      : hasRunConfig
+        ? activeAgents.length
+        : activeAgents.length || live;
+    const signalCount = Number.isFinite(summary?.eventCount) ? summary.eventCount : 0;
+
+    for (const element of document.querySelectorAll("[data-nexus-connected-value]")) {
+      element.textContent = String(totalAgents);
+    }
+    for (const element of document.querySelectorAll("[data-nexus-live-value]")) {
+      element.textContent = String(activeCount);
+    }
+    for (const element of document.querySelectorAll("[data-nexus-signal-value]")) {
+      element.textContent = String(signalCount);
+    }
+
+    container.dataset.activeAgents = String(activeCount);
+    container.setAttribute(
+      "aria-label",
+      `Nexus network: ${totalAgents} connected people, ${activeCount} live now. ${activeAgents.length} running agents are highlighted with stable unique colors.`
+    );
+  }
+
+  function updateAgentNodes(nextActiveAgents, summary = {}) {
     activeAgents = Array.isArray(nextActiveAgents) ? nextActiveAgents.filter(Boolean) : [];
     activeAgentNodeIndices = new Map();
     const usedIndices = new Set();
@@ -176,10 +235,10 @@ function mountNexusScene(container) {
       nodes.setMatrixAt(index, dummy.matrix);
     }
 
-    activeAgents.forEach((agentId, agentIndex) => {
+    activeAgents.forEach((agentId) => {
       const nodeIndex = nodeIndexForAgent(agentId, usedIndices);
       activeAgentNodeIndices.set(agentId, nodeIndex);
-      activeNodeColor.setHex(colorForAgent(agentId, agentIndex));
+      activeNodeColor.setHex(colorForAgent(agentId));
       dummy.position.copy(positions[nodeIndex]);
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
@@ -192,11 +251,16 @@ function mountNexusScene(container) {
           transparent: true,
           opacity: 0.95,
           blending: THREE.AdditiveBlending,
+          depthTest: false,
           depthWrite: false
         })
       );
       marker.position.copy(positions[nodeIndex].clone().multiplyScalar(1.01));
       marker.userData.agentId = agentId;
+      marker.userData.baseScale = 1;
+      marker.userData.baseOpacity = 0.95;
+      marker.userData.phase = (hashString(agentId) % 628) / 100;
+      marker.userData.kind = "marker";
       activeMarkers.add(marker);
 
       const glow = new THREE.Mesh(
@@ -206,21 +270,22 @@ function mountNexusScene(container) {
           transparent: true,
           opacity: 0.18,
           blending: THREE.AdditiveBlending,
+          depthTest: false,
           depthWrite: false
         })
       );
       glow.position.copy(marker.position);
       glow.userData.agentId = agentId;
+      glow.userData.baseScale = 1;
+      glow.userData.baseOpacity = 0.18;
+      glow.userData.phase = marker.userData.phase;
+      glow.userData.kind = "glow";
       activeMarkers.add(glow);
     });
 
     nodes.instanceColor.needsUpdate = true;
     nodes.instanceMatrix.needsUpdate = true;
-    container.dataset.activeAgents = String(activeAgents.length);
-    container.setAttribute(
-      "aria-label",
-      `Nexus network: ${connected} connected people, ${activeAgents.length || live} live now. ${activeAgents.length} running agents are highlighted with unique colors.`
-    );
+    updateNexusCounters(summary);
   }
 
   function addArc() {
@@ -229,7 +294,7 @@ function mountNexusScene(container) {
     const startIndex = highlighted.length > 0 ? highlighted[Math.floor(Math.random() * highlighted.length)] : Math.floor(Math.random() * positions.length);
     let endIndex = Math.floor(Math.random() * positions.length);
     if (endIndex === startIndex) endIndex = (endIndex + 7) % positions.length;
-    const palette = highlighted.length > 0 ? activeAgents.map((agentId, index) => colorForAgent(agentId, index)) : [0x39ff88, 0x65b7ff, 0xf2d15b];
+    const palette = highlighted.length > 0 ? activeAgents.map((agentId) => colorForAgent(agentId)) : [0x39ff88, 0x65b7ff, 0xf2d15b];
     arcs.add(makeArc(positions[startIndex], positions[endIndex], palette[Math.floor(Math.random() * palette.length)]));
   }
 
@@ -274,7 +339,7 @@ function mountNexusScene(container) {
   resizeObserver.observe(container);
   updateAgentNodes(deriveActiveAgentsFromEvents(window.__RUN_EVENTS_CONFIG__?.initialEvents));
   window.addEventListener("nexus:agents", (event) => {
-    updateAgentNodes(event.detail?.activeAgents);
+    updateAgentNodes(event.detail?.activeAgents, event.detail);
   });
 
   let frame = 0;
@@ -286,6 +351,15 @@ function mountNexusScene(container) {
     }
 
     if (frame % 118 === 0) addArc();
+
+    if (!prefersReducedMotion) {
+      for (const marker of activeMarkers.children) {
+        const pulse = Math.sin(frame * 0.045 + marker.userData.phase);
+        const scaleAmount = marker.userData.kind === "glow" ? 1 + pulse * 0.22 : 1 + pulse * 0.08;
+        marker.scale.setScalar(marker.userData.baseScale * scaleAmount);
+        marker.material.opacity = Math.max(0, marker.userData.baseOpacity + pulse * (marker.userData.kind === "glow" ? 0.06 : 0.08));
+      }
+    }
 
     for (let index = arcs.children.length - 1; index >= 0; index -= 1) {
       const arc = arcs.children[index];
