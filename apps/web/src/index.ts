@@ -91,6 +91,29 @@ type SimulationEvent = {
   createdAt: string;
 };
 
+type SimulationAgent = {
+  id: string;
+  simulationRunId: string;
+  personaId: string | null;
+  testAccountId: string | null;
+  status: "IDLE" | "RUNNING" | "COMPLETED" | "FAILED";
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type RunAgentSummary = {
+  run: {
+    id: string;
+    status: string;
+    requestedAgentCount: number;
+    startedAt: string | null;
+    finishedAt: string | null;
+  };
+  agents: SimulationAgent[];
+};
+
 type Artifact = {
   id: string;
   simulationRunId: string;
@@ -202,6 +225,7 @@ function renderPage(title: string, body: string): string {
       --glow: 0 0 0 1px rgba(57, 255, 136, 0.08), 0 0 28px rgba(57, 255, 136, 0.09);
     }
     * { box-sizing: border-box; }
+    html { overflow-x: hidden; }
     body {
       margin: 0;
       font-family: "Aptos", "Segoe UI Variable", "Bahnschrift", sans-serif;
@@ -210,6 +234,7 @@ function renderPage(title: string, body: string): string {
         linear-gradient(180deg, #03110a 0%, #010403 52%, #000201 100%),
         repeating-linear-gradient(90deg, rgba(57,255,136,0.035) 0 1px, transparent 1px 58px);
       min-height: 100vh;
+      overflow-x: clip;
     }
     body::before {
       content: "";
@@ -224,10 +249,12 @@ function renderPage(title: string, body: string): string {
       mask-image: linear-gradient(180deg, rgba(0,0,0,0.52), transparent 92%);
     }
     a { color: #9dffbf; }
+    img, svg, canvas { max-width: 100%; }
     .page-shell {
-      max-width: 1380px;
+      width: min(100%, 1380px);
       margin: 0 auto;
-      padding: 26px 18px 64px;
+      padding: clamp(16px, 2.4vw, 28px) clamp(12px, 2vw, 20px) 64px;
+      min-width: 0;
     }
     .hero-card, .surface-card {
       position: relative;
@@ -245,8 +272,8 @@ function renderPage(title: string, body: string): string {
       pointer-events: none;
       background: linear-gradient(135deg, rgba(57, 255, 136, 0.035), transparent 38%, transparent 76%, rgba(101, 183, 255, 0.035));
     }
-    .hero-card { padding: 28px; margin-bottom: 22px; }
-    .surface-card { padding: 24px; margin-bottom: 18px; }
+    .hero-card { padding: clamp(18px, 2.3vw, 28px); margin-bottom: 22px; }
+    .surface-card { padding: clamp(16px, 2vw, 24px); margin-bottom: 18px; }
     .eyebrow {
       display: inline-flex;
       align-items: center;
@@ -270,12 +297,16 @@ function renderPage(title: string, body: string): string {
       flex-wrap: wrap;
     }
     .nav-links {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, max-content));
       gap: 10px;
       align-items: center;
     }
     .nav-links a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
       text-decoration: none;
       padding: 10px 14px;
       border-radius: 4px;
@@ -298,6 +329,7 @@ function renderPage(title: string, body: string): string {
       background: linear-gradient(135deg, #39ff88 0%, #00b85c 100%);
       color: #001f0f;
       padding: 10px 16px;
+      min-height: 44px;
       cursor: pointer;
       font-weight: 700;
       letter-spacing: 0.01em;
@@ -319,6 +351,7 @@ function renderPage(title: string, body: string): string {
     input, select, textarea {
       width: 100%;
       padding: 12px 14px;
+      min-height: 44px;
       border-radius: 4px;
       border: 1px solid var(--line);
       background: rgba(0, 6, 3, 0.82);
@@ -340,7 +373,7 @@ function renderPage(title: string, body: string): string {
       font-family: "Aptos Display", "Segoe UI Variable", "Trebuchet MS", sans-serif;
     }
     h1 {
-      font-size: 3.8rem;
+      font-size: clamp(2.3rem, 6vw, 3.8rem);
       line-height: 0.96;
       margin-bottom: 12px;
       letter-spacing: 0;
@@ -352,9 +385,9 @@ function renderPage(title: string, body: string): string {
       display: grid;
       gap: 16px;
     }
-    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 14px; }
     .flash, .error, .empty-state {
       border-radius: 6px;
       padding: 14px 16px;
@@ -363,7 +396,7 @@ function renderPage(title: string, body: string): string {
     .flash { background: rgba(57, 255, 136, 0.08); color: var(--accent); border: 1px solid rgba(57, 255, 136, 0.2); }
     .error { background: rgba(255, 107, 134, 0.1); color: #ffc1cc; border: 1px solid rgba(255, 107, 134, 0.2); }
     .empty-state { background: rgba(57,255,136,0.035); color: var(--muted); border: 1px dashed rgba(57, 255, 136, 0.24); }
-    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; min-width: 0; }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -375,7 +408,7 @@ function renderPage(title: string, body: string): string {
       font-weight: 700;
       border: 1px solid rgba(57, 255, 136, 0.16);
     }
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 12px; }
     .metric-box {
       padding: 16px;
       border-radius: 6px;
@@ -385,18 +418,19 @@ function renderPage(title: string, body: string): string {
     }
     .metric-box strong { display: block; font-size: 1.8rem; margin-top: 12px; letter-spacing: -0.01em; }
     .metric-box .helper { margin-bottom: 0; }
-    .table-shell { overflow-x: auto; }
+    .table-shell { overflow-x: auto; max-width: 100%; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(57, 255, 136, 0.12); vertical-align: top; text-align: left; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(57, 255, 136, 0.12); vertical-align: top; text-align: left; overflow-wrap: anywhere; }
     th { color: #6dff9c; font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
     .choice-list label { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(57, 255, 136, 0.15); border-radius: 6px; background: rgba(57,255,136,0.035); margin-bottom: 8px; color: var(--ink); }
     .choice-list input { width: auto; margin-top: 2px; }
-    .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .page-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; min-width: 0; }
     .inline-form { display: inline; }
     .muted-link { color: var(--muted); }
     [data-loading-form][aria-busy="true"] { opacity: 0.88; }
-    .panel-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; }
-    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .panel-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 18px; align-items: start; }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; min-width: 0; }
+    .panel-title > * { min-width: 0; }
     .section-kicker {
       display: inline-block;
       margin-bottom: 10px;
@@ -418,6 +452,7 @@ function renderPage(title: string, body: string): string {
       border-radius: 6px;
       background: rgba(57,255,136,0.035);
       border: 1px solid rgba(57, 255, 136, 0.14);
+      overflow-wrap: anywhere;
     }
     .list-item strong { font-size: 1rem; }
     .list-meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
@@ -456,7 +491,7 @@ function renderPage(title: string, body: string): string {
     .status.info { color: #c9ffd7; background: rgba(57, 255, 136, 0.1); border-color: rgba(57, 255, 136, 0.2); }
     .dial-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
       gap: 14px;
       margin-top: 18px;
     }
@@ -527,7 +562,7 @@ function renderPage(title: string, body: string): string {
       position: relative;
       min-height: 520px;
       display: grid;
-      grid-template-columns: minmax(320px, 0.82fr) minmax(420px, 1.18fr);
+      grid-template-columns: minmax(0, 0.82fr) minmax(420px, 1.18fr);
       gap: 20px;
       align-items: stretch;
       padding: 20px;
@@ -562,7 +597,7 @@ function renderPage(title: string, body: string): string {
       min-width: 0;
     }
     .nexus-title {
-      font-size: 4.15rem;
+      font-size: clamp(2.55rem, 7vw, 4.15rem);
       line-height: 0.92;
       margin: 8px 0 14px;
       letter-spacing: 0;
@@ -579,7 +614,7 @@ function renderPage(title: string, body: string): string {
     }
     .nexus-stats {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
       gap: 10px;
     }
     .nexus-stat {
@@ -598,6 +633,7 @@ function renderPage(title: string, body: string): string {
     }
     .nexus-stage {
       min-height: 480px;
+      min-width: 0;
       border: 1px solid rgba(57, 255, 136, 0.11);
       border-radius: 8px;
       background:
@@ -629,6 +665,9 @@ function renderPage(title: string, body: string): string {
       padding-top: 18px;
       border-top: 1px solid rgba(57, 255, 136, 0.12);
     }
+    .nexus-nav .nav-links {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 138px), 1fr));
+    }
     .nexus-nav .nav-links a {
       background: transparent;
       border-color: rgba(57, 255, 136, 0.11);
@@ -637,23 +676,137 @@ function renderPage(title: string, body: string): string {
       body::before, .nexus-shell::before { opacity: 0.28; }
       .button, button, .nav-links a { transition: none; }
     }
-    @media (max-width: 720px) {
-      .page-shell { padding: 18px 12px 48px; }
-      .hero-card, .surface-card { padding: 18px; border-radius: 8px; }
-      h1, .nexus-title { font-size: 2.55rem; }
-      .nexus-stats { grid-template-columns: 1fr; }
-      .nexus-shell { padding: 12px; }
-      .nexus-stage, .nexus-scene { min-height: 360px; }
-    }
     @media (max-width: 980px) {
       .panel-grid { grid-template-columns: 1fr; }
-      .nexus-shell { grid-template-columns: 1fr; }
+      .nexus-shell {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+      .nexus-stage, .nexus-scene { min-height: 400px; }
+      .panel-title {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+    @media (max-width: 720px) {
+      .page-shell { padding: 14px 10px 44px; }
+      .hero-card, .surface-card { border-radius: 8px; }
+      .hero-row, .stack-row, .panel-title {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .nav-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .nav-links a,
+      .page-actions > a,
+      .page-actions > button,
+      .page-actions > form,
+      .page-actions > form button {
+        width: 100%;
+      }
+      .page-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .inline-form { display: block; }
+      .nexus-shell {
+        padding: 12px;
+        gap: 14px;
+      }
+      .nexus-copy { gap: 16px; }
+      .nexus-subcopy { font-size: 0.95rem; line-height: 1.5; }
+      .nexus-stats { grid-template-columns: 1fr; }
+      .nexus-stat {
+        min-height: 0;
+        padding: 12px;
+      }
+      .nexus-stat strong {
+        font-size: 1.35rem;
+        margin-top: 4px;
+      }
+      .nexus-stage, .nexus-scene { min-height: 320px; }
+      .dial-card { min-height: 0; }
+      [style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      [style*="grid-column:1/-1"],
+      [style*="grid-column:1 / -1"] {
+        grid-column: auto !important;
+      }
+      .table-shell {
+        overflow-x: visible;
+      }
+      .table-shell table {
+        min-width: 0;
+        border-collapse: separate;
+        border-spacing: 0 10px;
+      }
+      .table-shell thead {
+        display: none;
+      }
+      .table-shell tbody,
+      .table-shell tr,
+      .table-shell td {
+        display: block;
+        width: 100%;
+      }
+      .table-shell tr {
+        padding: 12px;
+        border: 1px solid rgba(57, 255, 136, 0.14);
+        border-radius: 6px;
+        background: rgba(57,255,136,0.035);
+        margin-bottom: 12px;
+      }
+      .table-shell td {
+        display: grid;
+        grid-template-columns: minmax(92px, 34%) minmax(0, 1fr);
+        gap: 10px;
+        border-bottom: 0;
+        padding: 8px 0;
+      }
+      .table-shell td::before {
+        content: attr(data-label);
+        color: #6dff9c;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .table-shell td[colspan] {
+        display: block;
+      }
+      .table-shell td[colspan]::before {
+        display: none;
+        content: "";
+      }
+    }
+    @media (max-width: 420px) {
+      .nav-links { grid-template-columns: 1fr; }
+      .nexus-stage, .nexus-scene { min-height: 280px; }
+      .table-shell td {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="page-shell">${body}</div>
   <script>
+    document.querySelectorAll(".table-shell table").forEach(function (table) {
+      const headers = Array.from(table.querySelectorAll("thead th")).map(function (header) {
+        return (header.textContent || "").trim();
+      });
+      table.querySelectorAll("tbody tr").forEach(function (row) {
+        Array.from(row.querySelectorAll("td")).forEach(function (cell, index) {
+          if (!cell.hasAttribute("data-label") && headers[index]) {
+            cell.setAttribute("data-label", headers[index]);
+          }
+        });
+      });
+    });
+
     document.addEventListener("submit", function (event) {
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;
@@ -825,6 +978,498 @@ function shellNav(user: CurrentUser): string {
       <div class="nexus-scene" data-nexus-scene data-connected="128" data-live="0" role="img"></div>
     </div>
   </section>`;
+}
+
+function renderHomePage(): string {
+  return renderPage(
+    "Synthetic User Platform",
+    `<style>
+      .home-shell {
+        position: relative;
+        margin: -6px auto 0;
+      }
+      .home-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 0;
+        padding: 14px 0 18px;
+      }
+      .home-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        color: #f1fff6;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        text-decoration: none;
+      }
+      .home-mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid rgba(57, 255, 136, 0.32);
+        border-radius: 7px;
+        background: rgba(57,255,136,0.08);
+        color: var(--accent);
+        font-weight: 900;
+      }
+      .home-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      .home-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 9px 12px;
+        color: #c9ffe0;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .home-links a:hover { background: rgba(57,255,136,0.07); }
+      .home-hero {
+        position: relative;
+        min-height: min(760px, calc(100vh - 48px));
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+        gap: 26px;
+        align-items: center;
+        padding: clamp(28px, 5vw, 72px) clamp(16px, 3vw, 34px);
+        border: 1px solid rgba(57, 255, 136, 0.16);
+        border-radius: 10px;
+        background:
+          radial-gradient(circle at 72% 30%, rgba(57, 255, 136, 0.13), transparent 30%),
+          radial-gradient(circle at 18% 16%, rgba(101, 183, 255, 0.12), transparent 26%),
+          linear-gradient(180deg, rgba(2, 18, 11, 0.82), rgba(0, 5, 3, 0.96)),
+          repeating-linear-gradient(90deg, rgba(57,255,136,0.03) 0 1px, transparent 1px 86px);
+        overflow: hidden;
+        box-shadow: var(--shadow), 0 0 48px rgba(57,255,136,0.08);
+      }
+      .home-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(120deg, transparent 0 38%, rgba(57,255,136,0.07) 38.2% 38.4%, transparent 38.6% 100%),
+          repeating-linear-gradient(180deg, transparent 0 30px, rgba(57,255,136,0.045) 31px 32px);
+        opacity: 0.42;
+      }
+      .home-hero-copy, .home-hero-visual {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+      }
+      .home-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        color: var(--accent);
+        background: rgba(57,255,136,0.08);
+        border: 1px solid rgba(57,255,136,0.18);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .home-title {
+        margin: 18px 0 16px;
+        max-width: 760px;
+        font-size: clamp(2.65rem, 6vw, 5.8rem);
+        line-height: 0.95;
+      }
+      .home-title span { color: var(--accent); text-shadow: 0 0 22px rgba(57,255,136,0.22); }
+      .home-lede {
+        max-width: 680px;
+        color: #b6cbbb;
+        font-size: clamp(1rem, 1.5vw, 1.18rem);
+        line-height: 1.65;
+      }
+      .home-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 26px;
+      }
+      .home-actions .button { text-decoration: none; }
+      .home-trust {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 34px;
+        max-width: 720px;
+      }
+      .home-trust span {
+        min-height: 54px;
+        display: grid;
+        place-items: center;
+        padding: 10px;
+        border-radius: 6px;
+        color: #9bb6a5;
+        border: 1px solid rgba(57,255,136,0.1);
+        background: rgba(0, 8, 5, 0.42);
+        font-size: 12px;
+        font-weight: 800;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .home-hero-visual {
+        min-height: 520px;
+        border: 1px solid rgba(57,255,136,0.12);
+        border-radius: 10px;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(0, 12, 7, 0.18), rgba(0, 3, 2, 0.72)),
+          repeating-linear-gradient(0deg, transparent 0 34px, rgba(57,255,136,0.035) 35px 36px);
+      }
+      .home-hero-visual .nexus-scene {
+        min-height: 520px;
+      }
+      .home-section {
+        padding: clamp(46px, 7vw, 86px) 0;
+      }
+      .home-section.alt {
+        margin-inline: calc(clamp(12px, 2vw, 20px) * -1);
+        padding-inline: clamp(12px, 2vw, 20px);
+        background: linear-gradient(180deg, rgba(57,255,136,0.025), rgba(101,183,255,0.025));
+      }
+      .home-section-head {
+        max-width: 760px;
+        margin: 0 auto 28px;
+        text-align: center;
+      }
+      .home-section-head h2 {
+        font-size: clamp(1.85rem, 3vw, 2.7rem);
+        margin-bottom: 10px;
+      }
+      .home-section-head p {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+      .home-card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .home-product-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        gap: 18px;
+        align-items: stretch;
+      }
+      .home-feature-card, .home-product-panel, .home-cta-panel {
+        padding: clamp(18px, 2vw, 26px);
+        border-radius: 8px;
+        border: 1px solid rgba(57,255,136,0.14);
+        background: linear-gradient(180deg, rgba(4,16,10,0.84), rgba(1,8,5,0.92));
+        box-shadow: var(--glow);
+      }
+      .home-icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        margin-bottom: 18px;
+        border-radius: 8px;
+        color: #001f0f;
+        background: linear-gradient(135deg, #39ff88, #65b7ff);
+        font-weight: 900;
+      }
+      .home-feature-card h3, .home-product-panel h3 {
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+      }
+      .home-feature-card p, .home-product-panel p {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .home-list {
+        display: grid;
+        gap: 10px;
+        padding: 0;
+        margin: 18px 0 0;
+        list-style: none;
+      }
+      .home-list li {
+        position: relative;
+        padding-left: 18px;
+        color: #d6ffe4;
+        font-size: 0.93rem;
+      }
+      .home-list li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.62em;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .home-product-panel.primary {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 420px;
+      }
+      .home-proof-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
+      }
+      .home-proof {
+        min-height: 120px;
+        padding: 18px;
+        border-radius: 8px;
+        border: 1px solid rgba(57,255,136,0.12);
+        background: rgba(57,255,136,0.04);
+      }
+      .home-proof strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #f1fff6;
+        font-size: 1.65rem;
+      }
+      .home-proof span {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .home-cta {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+        gap: 18px;
+        align-items: stretch;
+      }
+      .home-steps {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+      .home-step {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        padding: 14px;
+        border-radius: 7px;
+        background: rgba(57,255,136,0.045);
+        border: 1px solid rgba(57,255,136,0.12);
+      }
+      .home-step b {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        color: #001f0f;
+        background: var(--accent);
+      }
+      .home-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 28px 0 6px;
+        color: var(--muted);
+        border-top: 1px solid rgba(57,255,136,0.12);
+      }
+      @media (max-width: 980px) {
+        .home-hero, .home-product-grid, .home-cta {
+          grid-template-columns: 1fr;
+        }
+        .home-hero-visual, .home-hero-visual .nexus-scene {
+          min-height: 390px;
+        }
+        .home-card-grid, .home-proof-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        .home-shell { overflow-x: hidden; }
+        .home-nav, .home-links, .home-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .home-links a, .home-actions .button {
+          width: 100%;
+          justify-content: center;
+        }
+        .home-hero {
+          min-height: 0;
+          padding: 22px 14px;
+        }
+        .home-trust, .home-card-grid, .home-proof-grid {
+          grid-template-columns: 1fr;
+        }
+        .home-hero-visual, .home-hero-visual .nexus-scene {
+          min-height: 300px;
+        }
+      }
+    </style>
+    <main class="home-shell">
+      <nav class="home-nav" aria-label="Homepage navigation">
+        <a class="home-brand" href="/">
+          <span class="home-mark">S</span>
+          <span>Synthetic User Platform</span>
+        </a>
+        <div class="home-links">
+          <a href="#capabilities">Capabilities</a>
+          <a href="#product">Product</a>
+          <a href="#evidence">Evidence</a>
+          <a href="#start">Get Started</a>
+          <a class="button" href="/login">Open Dashboard</a>
+        </div>
+      </nav>
+
+      <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-copy">
+          <span class="home-badge">Synthetic beta testing for real product risk</span>
+          <h1 id="home-title" class="home-title">Watch AI users test your product <span>before customers do.</span></h1>
+          <p class="home-lede">Launch persona-driven synthetic users against a real app, watch them move through workflows in Nexus View, and collect the screenshots, traces, errors, findings, and reports your release process needs.</p>
+          <div class="home-actions">
+            <a class="button" href="/login">Start a validation run</a>
+            <a class="button secondary" href="#capabilities">Explore the platform</a>
+          </div>
+          <div class="home-trust" aria-label="Designed for teams">
+            <span>Product</span>
+            <span>QA</span>
+            <span>Design</span>
+            <span>Engineering</span>
+            <span>Growth</span>
+          </div>
+        </div>
+        <div class="home-hero-visual" aria-label="Nexus social graph preview">
+          <div class="nexus-scene" data-nexus-scene data-connected="160" data-live="18" role="img"></div>
+        </div>
+      </section>
+
+      <section id="capabilities" class="home-section">
+        <div class="home-section-head">
+          <span class="section-kicker">Core Capabilities</span>
+          <h2>Release intelligence from synthetic people, not just scripts.</h2>
+          <p>Use repeatable agent fleets to expose friction, broken flows, confusing copy, missing affordances, network failures, and workflow risk before launch.</p>
+        </div>
+        <div class="home-card-grid">
+          <article class="home-feature-card">
+            <div class="home-icon">01</div>
+            <h3>Persona-driven agent fleets</h3>
+            <p>Model realistic user behavior with configurable personas, confidence, patience, pressure, domain expertise, and recovery traits.</p>
+            <ul class="home-list">
+              <li>20-agent demo and custom runs</li>
+              <li>Stable agent identities and power levels</li>
+              <li>Concurrent execution with worker controls</li>
+            </ul>
+          </article>
+          <article class="home-feature-card">
+            <div class="home-icon">02</div>
+            <h3>Live Nexus graph</h3>
+            <p>See the run as a living network: total population, queued agents, live workers, completed testers, and event signals in one ambient view.</p>
+            <ul class="home-list">
+              <li>3D active-agent visualization</li>
+              <li>Stable colors per running agent</li>
+              <li>Reduced-motion aware interface</li>
+            </ul>
+          </article>
+          <article class="home-feature-card">
+            <div class="home-icon">03</div>
+            <h3>Evidence-first reporting</h3>
+            <p>Every run produces inspectable proof, not vague sentiment. Review events, errors, screenshots, traces, artifacts, findings, and generated reports.</p>
+            <ul class="home-list">
+              <li>Console and network issue capture</li>
+              <li>Screenshot, trace, and report artifacts</li>
+              <li>Calibration against actual metrics</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="product" class="home-section alt">
+        <div class="home-section-head">
+          <span class="section-kicker">Product Surface</span>
+          <h2>A complete operating console for synthetic-user validation.</h2>
+          <p>Set up targets, accounts, workflows, LLM providers, budgets, and calibration loops without stitching together separate testing tools.</p>
+        </div>
+        <div class="home-product-grid">
+          <article class="home-product-panel primary">
+            <div>
+              <span class="home-badge">Nexus View</span>
+              <h3 style="font-size:clamp(1.8rem,3vw,2.55rem);margin-top:16px;">A live social graph for test runs.</h3>
+              <p>Instead of treating agents as table rows, Nexus renders synthetic users as equal-weight nodes in a shared network. Running agents glow, queued agents remain part of the population, and activity arcs show the simulation is alive.</p>
+            </div>
+            <div class="home-proof-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+              <div class="home-proof"><strong>20+</strong><span>agents per demo run</span></div>
+              <div class="home-proof"><strong>100</strong><span>custom run cap</span></div>
+            </div>
+          </article>
+          <div class="home-card-grid" style="grid-template-columns:1fr;">
+            <article class="home-product-panel">
+              <h3>Target and workflow management</h3>
+              <p>Register local or staging apps, validate connectivity, define success criteria, and reuse workflows across releases.</p>
+            </article>
+            <article class="home-product-panel">
+              <h3>LLM provider controls</h3>
+              <p>Configure OpenAI or Anthropic providers, test connections, track usage, and keep budget policy visible for agentic runs.</p>
+            </article>
+            <article class="home-product-panel">
+              <h3>Calibration loop</h3>
+              <p>Compare synthetic predictions against actual beta or production-adjacent workflow metrics as the product matures.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" class="home-section">
+        <div class="home-section-head">
+          <span class="section-kicker">Evidence Layer</span>
+          <h2>Designed for release decisions, not demos.</h2>
+          <p>The platform keeps the high-level run feel cinematic while preserving the operational details teams need to fix issues quickly.</p>
+        </div>
+        <div class="home-proof-grid">
+          <div class="home-proof"><strong>Events</strong><span>agent, action, workflow, console, and network signals</span></div>
+          <div class="home-proof"><strong>Artifacts</strong><span>screenshots, traces, videos, reports, and PDFs</span></div>
+          <div class="home-proof"><strong>Findings</strong><span>workflow failure, UX friction, bugs, and risk summaries</span></div>
+          <div class="home-proof"><strong>Budgets</strong><span>cost, token, action, and duration guardrails</span></div>
+        </div>
+      </section>
+
+      <section id="start" class="home-section alt">
+        <div class="home-cta">
+          <div class="home-cta-panel">
+            <span class="section-kicker">Get Started</span>
+            <h2>Run the product through a synthetic beta cohort.</h2>
+            <p class="helper">Use the seeded dashboard account, point the platform at your local or staging app, then start with the 20-agent preset to see the evidence loop end to end.</p>
+            <div class="home-actions">
+              <a class="button" href="/login">Open dashboard</a>
+              <a class="button secondary" href="/dashboard/run-setup">Go to run setup</a>
+            </div>
+          </div>
+          <div class="home-cta-panel">
+            <span class="section-kicker">Validation Flow</span>
+            <div class="home-steps">
+              <div class="home-step"><b>1</b><div><strong>Connect a target</strong><br /><span class="helper">Register your app URL and allowed domains.</span></div></div>
+              <div class="home-step"><b>2</b><div><strong>Choose personas and accounts</strong><br /><span class="helper">Use seeded personas or tune behavior traits.</span></div></div>
+              <div class="home-step"><b>3</b><div><strong>Launch agents</strong><br /><span class="helper">Watch Nexus, inspect events, and review artifacts.</span></div></div>
+              <div class="home-step"><b>4</b><div><strong>Act on evidence</strong><br /><span class="helper">Use findings and reports to prioritize product fixes.</span></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="home-footer">
+        <strong>Synthetic User Platform</strong>
+        <span>Persona-driven validation, Nexus monitoring, and release evidence.</span>
+      </footer>
+    </main>`
+  );
 }
 
 function renderLogin(error?: string): string {
@@ -1065,14 +1710,18 @@ function renderRunDetailPage(args: {
   user: CurrentUser;
   runId: string;
   events: SimulationEvent[];
+  agentSummary: RunAgentSummary | null;
   artifacts: Artifact[];
   findings: Finding[];
+  personas: Persona[];
   flash?: string;
   error?: string;
 }): string {
   const initialEvents = JSON.stringify(args.events);
+  const initialAgentSummary = JSON.stringify(args.agentSummary);
   const initialArtifacts = JSON.stringify(args.artifacts);
   const initialFindings = JSON.stringify(args.findings);
+  const initialPersonas = JSON.stringify(args.personas);
   return renderPage(
     `Run ${args.runId}`,
     `<script src="https://cdn.tailwindcss.com"></script>
@@ -1126,6 +1775,71 @@ function renderRunDetailPage(args: {
   #run-dashboard-root .recharts-text {
     fill: #86a996;
   }
+  #run-dashboard-root {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  #run-dashboard-root * {
+    min-width: 0;
+  }
+  #run-dashboard-root table {
+    table-layout: fixed;
+  }
+  #run-dashboard-root th,
+  #run-dashboard-root td,
+  #run-dashboard-root p,
+  #run-dashboard-root span,
+  #run-dashboard-root a,
+  #run-dashboard-root button {
+    overflow-wrap: anywhere;
+  }
+  #run-dashboard-root button,
+  #run-dashboard-root a[href] {
+    min-height: 44px;
+  }
+  #run-dashboard-root section {
+    min-width: 0;
+  }
+  @media (max-width: 760px) {
+    #run-dashboard-root table,
+    #run-dashboard-root thead,
+    #run-dashboard-root tbody,
+    #run-dashboard-root tr,
+    #run-dashboard-root td {
+      display: block;
+      width: 100%;
+    }
+    #run-dashboard-root thead {
+      display: none;
+    }
+    #run-dashboard-root tr {
+      padding: 12px;
+      border: 1px solid rgba(57, 255, 136, 0.14);
+      border-radius: 8px;
+      background: rgba(57,255,136,0.035);
+      margin-bottom: 12px;
+    }
+    #run-dashboard-root td {
+      border: 0 !important;
+      padding: 8px 0 !important;
+    }
+    #run-dashboard-root td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 4px;
+      color: #6dff9c;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    #run-dashboard-root td:not([data-label])::before {
+      display: none;
+    }
+    #run-dashboard-root [class*="max-h-"] {
+      max-height: 320px;
+    }
+  }
 </style>
 ${shellNav(args.user)}
 ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
@@ -1169,8 +1883,10 @@ window.__RUN_EVENTS_CONFIG__ = {
   runId: ${JSON.stringify(args.runId)},
   apiBaseUrl: ${JSON.stringify(env.API_BASE_URL)},
   initialEvents: ${initialEvents},
+  initialAgentSummary: ${initialAgentSummary},
   initialArtifacts: ${initialArtifacts},
-  initialFindings: ${initialFindings}
+  initialFindings: ${initialFindings},
+  personas: ${initialPersonas}
 };
 </script>
 <script type="module" src="/static/run-events.js"></script>`
@@ -1347,7 +2063,9 @@ function formatGap(value: number | null): string {
   return `${prefix}${value.toFixed(2)}%`;
 }
 
-app.get("/", async (_req, res) => res.redirect("/dashboard/projects"));
+app.get("/", async (_req, res) => {
+  res.status(200).type("html").send(renderHomePage());
+});
 app.get("/dashboard", async (_req, res) => res.redirect("/dashboard/projects"));
 
 app.get("/login", async (req, res) => {
@@ -1523,12 +2241,26 @@ function renderTestAccountsPage(
           <div class="page-actions" style="align-self:end;"><button type="submit">Create</button></div>
         </form>
         <div style="margin-top:18px;">
-          <span class="section-kicker">Batch Import</span>
-          <h3>Generate 20 placeholder accounts</h3>
-          <form method="post" action="/dashboard/test-accounts/import-20" class="page-actions">
-            <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
-            <button type="submit">Generate 20 Accounts</button>
-          </form>
+          <span class="section-kicker">Batch Operations</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+            <div>
+              <h3>Add test accounts</h3>
+              <p class="helper">Generates placeholder accounts with seeded credentials ready for agents.</p>
+              <form method="post" action="/dashboard/test-accounts/batch-add" class="grid-2">
+                <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+                <label>Count<input type="number" name="count" min="1" max="200" value="20" required /></label>
+                <div style="align-self:end;"><button type="submit">Add Accounts</button></div>
+              </form>
+            </div>
+            <div>
+              <h3>Delete all test accounts</h3>
+              <p class="helper">Removes every test account in this environment. Cannot be undone.</p>
+              <form method="post" action="/dashboard/test-accounts/delete-all" class="page-actions" onsubmit="return confirm('Delete ALL test accounts in this environment?');">
+                <input type="hidden" name="environmentId" value="${esc(selectedEnvironment.id)}" />
+                <button type="submit" class="danger">Delete All Test Accounts</button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>`
     : `<div class="empty-state" style="margin-top:18px;">No environments available. Create one under Projects first.</div>`;
@@ -1618,20 +2350,21 @@ app.post("/dashboard/test-accounts", async (req, res) => {
   res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Test+account+created`);
 });
 
-app.post("/dashboard/test-accounts/import-20", async (req, res) => {
+app.post("/dashboard/test-accounts/batch-add", async (req, res) => {
   const environmentId = String(req.body.environmentId ?? "");
+  const count = Math.min(200, Math.max(1, parseInt(String(req.body.count ?? "20"), 10) || 20));
 
-  const accounts = Array.from({ length: 20 }, (_, index) => {
-    const n = String(index + 1).padStart(2, "0");
+  const accounts = Array.from({ length: count }, (_, index) => {
+    const n = String(index + 1).padStart(3, "0");
     return {
-      label: `Seed Account ${n}`,
-      username: `seed_user_${n}`,
-      email: `seed_user_${n}@example.local`,
+      label: `Agent Account ${n}`,
+      username: `agent_${n}`,
+      email: `agent_${n}@example.local`,
       role: "tester",
-      plainTextPassword: `SeedPass!${n}`,
+      plainTextPassword: `AgentPass!${n}`,
       status: "AVAILABLE",
       allowConcurrentUse: false,
-      notes: "Imported batch"
+      notes: "Auto-generated"
     };
   });
 
@@ -1641,7 +2374,15 @@ app.post("/dashboard/test-accounts/import-20", async (req, res) => {
     body: JSON.stringify({ accounts })
   });
 
-  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Imported+20+accounts`);
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=Added+${count}+accounts`);
+});
+
+app.post("/dashboard/test-accounts/delete-all", async (req, res) => {
+  const environmentId = String(req.body.environmentId ?? "");
+  await apiRequest(req.headers.cookie, `/api/environments/${environmentId}/test-accounts/delete-all`, {
+    method: "DELETE"
+  });
+  res.redirect(`/dashboard/test-accounts?environmentId=${environmentId}&flash=All+test+accounts+deleted`);
 });
 
 app.post("/dashboard/test-accounts/:accountId/delete", async (req, res) => {
@@ -2046,16 +2787,31 @@ ${args.flash ? `<div class="flash">${esc(args.flash)}</div>` : ""}
     ${selectedProject && environments.length === 0 ? `<div class="empty-state" style="margin-top:16px;">Project <strong>${esc(selectedProject.name)}</strong> has no environments yet. Add one from the Projects screen to continue.</div>` : ""}
   </div>
   <div class="surface-card">
-    <span class="section-kicker">2. Preset</span>
-    <h2>20-agent demo</h2>
-    <p class="helper">Fastest path for the live walkthrough. This preset picks the configured demo project, environment, workflow, personas, and accounts automatically.</p>
-    <div class="pill-row" style="margin-bottom:14px;"><span class="pill">20 agents</span><span class="pill">live dashboard</span><span class="pill">report included</span></div>
-    <form method="post" action="/dashboard/demo-runs/20-agent">
-      <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
-      <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
-      <input type="hidden" name="workflowId" value="${esc(args.selectedWorkflowId ?? activeWorkflows[0]?.id ?? "")}" />
-      <button type="submit" data-loading-text="Starting demo run...">Start 20-agent demo preset</button>
-    </form>
+    <span class="section-kicker">2. Quick Launch</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <h2>20-agent demo</h2>
+        <p class="helper">Runs the walkthrough with 20 agents using the first available workflow, personas, and accounts.</p>
+        <div class="pill-row" style="margin-bottom:14px;"><span class="pill">20 agents</span><span class="pill">live dashboard</span><span class="pill">report included</span></div>
+        <form method="post" action="/dashboard/demo-runs/20-agent">
+          <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
+          <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+          <input type="hidden" name="workflowId" value="${esc(args.selectedWorkflowId ?? activeWorkflows[0]?.id ?? "")}" />
+          <button type="submit" data-loading-text="Starting demo run...">Start 20-agent demo</button>
+        </form>
+      </div>
+      <div>
+        <h2>Run X agents</h2>
+        <p class="helper">Enter how many agents you want. Accounts are created automatically if needed and agents run in parallel up to MAX_PARALLEL_AGENTS.</p>
+        <form method="post" action="/dashboard/demo-runs/custom-agent" style="display:flex;gap:8px;align-items:flex-end;margin-top:12px;">
+          <input type="hidden" name="projectId" value="${esc(selectedProject?.id ?? "")}" />
+          <input type="hidden" name="environmentId" value="${esc(args.selectedEnvironmentId ?? "")}" />
+          <input type="hidden" name="workflowId" value="${esc(args.selectedWorkflowId ?? activeWorkflows[0]?.id ?? "")}" />
+          <label style="flex:1;margin:0;">Agents<input type="number" name="agentCount" min="1" max="100" value="20" required /></label>
+          <button type="submit" data-loading-text="Launching...">Launch</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 <div class="surface-card">
@@ -2270,6 +3026,64 @@ app.post("/dashboard/demo-runs/20-agent", async (req, res) => {
   res.redirect(`/dashboard/runs/${response.data.run.id}?flash=20-agent+demo+run+started`);
 });
 
+app.post("/dashboard/demo-runs/custom-agent", async (req, res) => {
+  const projectId = String(req.body.projectId ?? "");
+  const environmentId = String(req.body.environmentId ?? "");
+  const workflowId = String(req.body.workflowId ?? "");
+  const agentCount = Math.min(100, Math.max(1, parseInt(String(req.body.agentCount ?? ""), 10) || 1));
+
+  if (!projectId || !environmentId || !workflowId) {
+    return void res.redirect(`/dashboard/run-setup?error=${encodeURIComponent("Missing project, environment, or workflow")}`);
+  }
+
+  const existing = await apiRequest<{ testAccounts: Array<{ id: string }> }>(
+    req.headers.cookie,
+    `/api/environments/${environmentId}/test-accounts`
+  );
+  const existingCount = existing?.testAccounts?.length ?? 0;
+  const needed = agentCount - existingCount;
+
+  if (needed > 0) {
+    const newAccounts = Array.from({ length: needed }, (_, i) => {
+      const n = String(existingCount + i + 1).padStart(3, "0");
+      return {
+        label: `Agent Account ${n}`,
+        username: `agent_${n}`,
+        email: `agent_${n}@example.local`,
+        role: "tester",
+        plainTextPassword: `AgentPass!${n}`,
+        status: "AVAILABLE",
+        allowConcurrentUse: false,
+        notes: "Auto-created"
+      };
+    });
+    await apiRequest(req.headers.cookie, `/api/environments/${environmentId}/test-accounts/import`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accounts: newAccounts })
+    });
+  }
+
+  const refreshed = await apiRequest<{ testAccounts: Array<{ id: string }> }>(
+    req.headers.cookie,
+    `/api/environments/${environmentId}/test-accounts`
+  );
+  const testAccountIds = (refreshed?.testAccounts ?? []).slice(0, agentCount).map((a) => a.id);
+
+  const response = await apiRequestDetailed<{ run?: { id: string } }>(req.headers.cookie, "/api/demo-runs/custom-agent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectId, environmentId, workflowId, agentCount, testAccountIds })
+  });
+
+  if (!response.ok || !response.data?.run?.id) {
+    const error = response.ok ? `Unable to start ${agentCount}-agent run` : response.error;
+    return void res.redirect(`/dashboard/run-setup?error=${encodeURIComponent(error)}`);
+  }
+
+  res.redirect(`/dashboard/runs/${response.data.run.id}?flash=${agentCount}-agent+run+started`);
+});
+
 app.get("/dashboard/calibration", async (req, res) => {
   const user = await fetchCurrentUser(req.headers.cookie);
   if (!ensureAuth(user, res)) return;
@@ -2378,6 +3192,10 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
     req.headers.cookie,
     `/api/runs/${runId}/events`
   );
+  const agentSummaryResponse = await apiRequest<RunAgentSummary>(
+    req.headers.cookie,
+    `/api/runs/${runId}/agents`
+  );
   const artifactsResponse = await apiRequest<{ artifacts: Artifact[] }>(
     req.headers.cookie,
     `/api/runs/${runId}/artifacts`
@@ -2385,6 +3203,10 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
   const findingsResponse = await apiRequest<{ findings: Finding[] }>(
     req.headers.cookie,
     `/api/runs/${runId}/findings`
+  );
+  const personasResponse = await apiRequest<{ personas: Persona[] }>(
+    req.headers.cookie,
+    "/api/personas"
   );
 
   if (!eventsResponse || !artifactsResponse) {
@@ -2401,8 +3223,10 @@ app.get("/dashboard/runs/:runId", async (req, res) => {
       user,
       runId,
       events: eventsResponse.events,
+      agentSummary: agentSummaryResponse ?? null,
       artifacts: artifactsResponse.artifacts,
       findings: findingsResponse?.findings ?? [],
+      personas: personasResponse?.personas ?? [],
       flash,
       error
     })
@@ -2429,5 +3253,3 @@ app.get("/runs/:runId", async (req, res) => {
   const encodedFlash = flash ? `?flash=${encodeURIComponent(flash)}` : "";
   res.redirect(`/dashboard/runs/${req.params.runId}${encodedFlash}`);
 });
-
-

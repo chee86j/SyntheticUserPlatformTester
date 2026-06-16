@@ -325,6 +325,10 @@ export class TestAccountRepository {
     return prisma.testAccount.deleteMany({ where: { id, organizationId } });
   }
 
+  async deleteAllForEnvironment(environmentId: string, organizationId: string) {
+    return prisma.testAccount.deleteMany({ where: { environmentId, organizationId } });
+  }
+
   async findByIdForOrganization(id: string, organizationId: string) {
     return prisma.testAccount.findFirst({
       where: { id, organizationId },

@@ -22,6 +22,167 @@ function extractNumber(payload, key) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+const agentAdjectives = [
+  "Vector",
+  "Signal",
+  "Prism",
+  "Cipher",
+  "Nova",
+  "Pulse",
+  "Atlas",
+  "Echo",
+  "Vertex",
+  "Apex",
+  "Ion",
+  "Zenith"
+];
+
+const agentNouns = [
+  "Sentinel",
+  "Pathfinder",
+  "Catalyst",
+  "Operator",
+  "Scout",
+  "Architect",
+  "Auditor",
+  "Strategist",
+  "Navigator",
+  "Analyst",
+  "Runner",
+  "Witness"
+];
+
+function personaValue(persona, key, fallback) {
+  const value = persona && typeof persona[key] === "number" ? persona[key] : fallback;
+  return clampNumber(value, 0, 100);
+}
+
+function derivePowerLevel(agentId, persona) {
+  if (!persona) return 40 + (hashString(agentId) % 56);
+
+  const score =
+    personaValue(persona, "technicalProficiency", 50) * 0.22 +
+    personaValue(persona, "domainExpertise", 50) * 0.22 +
+    personaValue(persona, "confidence", 50) * 0.18 +
+    personaValue(persona, "errorRecovery", 50) * 0.18 +
+    personaValue(persona, "timePressure", 50) * 0.1 +
+    personaValue(persona, "riskTolerance", 50) * 0.1;
+
+  return clampNumber(Math.round(score), 1, 99);
+}
+
+function traitBand(label, value) {
+  if (value >= 75) return `${label} high`;
+  if (value <= 35) return `${label} low`;
+  return `${label} mid`;
+}
+
+function buildAgentIdentity(agentId, seed, persona) {
+  const hash = hashString(`${agentId}:${seed?.personaId || ""}`);
+  const adjective = agentAdjectives[hash % agentAdjectives.length];
+  const noun = agentNouns[Math.floor(hash / agentAdjectives.length) % agentNouns.length];
+  const code = hash.toString(36).toUpperCase().slice(-3).padStart(3, "0");
+  const powerLevel = derivePowerLevel(agentId, persona);
+  const powerLabel = `PL${powerLevel}`;
+  const personaName = persona?.name || "Synthetic User";
+  const role = persona?.role || "Unassigned Persona";
+  const accountLabel = seed?.accountLabel || "";
+  const displayName = `${noun}-${code}`;
+  const subtitle = `${personaName} / ${role}`;
+  const tags = persona
+    ? [
+        `Tech ${personaValue(persona, "technicalProficiency", 50)}`,
+        `Domain ${personaValue(persona, "domainExpertise", 50)}`,
+        traitBand("Rec", personaValue(persona, "errorRecovery", 50)),
+        traitBand("Pressure", personaValue(persona, "timePressure", 50)),
+        traitBand("Risk", personaValue(persona, "riskTolerance", 50))
+      ]
+    : ["Synthetic", "Persona pending", `Signal ${powerLevel}`];
+
+  return {
+    agentId,
+    personaId: seed?.personaId || null,
+    accountLabel,
+    displayName,
+    subtitle,
+    powerLabel,
+    signature: `${adjective} ${noun}`,
+    personaName,
+    role,
+    powerLevel,
+    tags,
+    color: seed?.color || null
+  };
+}
+
+function buildAgentProfiles(events, personas, agents = []) {
+  const personaById = new Map((Array.isArray(personas) ? personas : []).map((persona) => [persona.id, persona]));
+  const seedByAgent = new Map();
+  const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  for (const agent of Array.isArray(agents) ? agents : []) {
+    if (!agent || !agent.id) continue;
+    seedByAgent.set(agent.id, { personaId: agent.personaId || null, accountLabel: "" });
+  }
+
+  for (const event of sorted) {
+    if (!event || !event.agentId) continue;
+    const seed = seedByAgent.get(event.agentId) || { personaId: null, accountLabel: "" };
+    const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+    if (event.personaId) seed.personaId = event.personaId;
+    if (typeof payload.accountLabel === "string" && payload.accountLabel) seed.accountLabel = payload.accountLabel;
+    seedByAgent.set(event.agentId, seed);
+  }
+
+  return Object.fromEntries(
+    [...seedByAgent.entries()].map(([agentId, seed]) => [
+      agentId,
+      buildAgentIdentity(agentId, seed, seed.personaId ? personaById.get(seed.personaId) : null)
+    ])
+  );
+}
+
+function agentProfileFor(agentId, profiles) {
+  return agentId && profiles && profiles[agentId] ? profiles[agentId] : null;
+}
+
+function normalizeAgentStatus(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "RUNNING") return "active";
+  if (normalized === "COMPLETED") return "completed";
+  if (normalized === "FAILED") return "failed";
+  if (normalized === "CANCELED" || normalized === "CANCELLED") return "cancelled";
+  return "pending";
+}
+
+function agentStatusLabel(status) {
+  if (status === "active") return "running";
+  if (status === "pending") return "queued";
+  return status || "queued";
+}
+
+function formatRunStatus(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "canceled") return "Canceled";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function deriveRunStatus(events) {
   const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   if (sorted.some((event) => event.eventType === "run.cancelled")) return "Cancelled";
@@ -31,9 +192,14 @@ function deriveRunStatus(events) {
   return "Pending";
 }
 
-function deriveActiveAgents(events) {
+function deriveAgentStatusById(events, agents = []) {
   const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const statusByAgent = new Map();
+
+  for (const agent of Array.isArray(agents) ? agents : []) {
+    if (!agent || !agent.id) continue;
+    statusByAgent.set(agent.id, normalizeAgentStatus(agent.status));
+  }
 
   for (const event of sorted) {
     if (!event.agentId) continue;
@@ -43,27 +209,41 @@ function deriveActiveAgents(events) {
     if (event.eventType === "agent.cancelled") statusByAgent.set(event.agentId, "cancelled");
   }
 
+  return statusByAgent;
+}
+
+function deriveActiveAgents(events, agents = []) {
+  const statusByAgent = deriveAgentStatusById(events, agents);
+
   return [...statusByAgent.entries()]
     .filter(([, status]) => status === "active")
     .map(([agentId]) => agentId)
     .sort((left, right) => left.localeCompare(right));
 }
 
-function deriveNexusSummary(events) {
-  const activeAgents = deriveActiveAgents(events);
-  const totalAgents = new Set(events.filter((event) => event.agentId).map((event) => event.agentId)).size;
+function deriveNexusSummary(events, personas, agentSummary) {
+  const agents = Array.isArray(agentSummary?.agents) ? agentSummary.agents : [];
+  const activeAgents = deriveActiveAgents(events, agents);
+  const eventAgentCount = new Set(events.filter((event) => event.agentId).map((event) => event.agentId)).size;
+  const totalAgents = agentSummary?.run?.requestedAgentCount || agents.length || eventAgentCount;
+  const statusByAgent = deriveAgentStatusById(events, agents);
+  const agentProfiles = buildAgentProfiles(events, personas, agents);
 
   return {
     activeAgents,
     activeAgentsCount: activeAgents.length,
     totalAgents,
+    queuedAgentsCount: [...statusByAgent.values()].filter((status) => status === "pending").length,
+    completedAgentsCount: [...statusByAgent.values()].filter((status) => status === "completed").length,
+    failedAgentsCount: [...statusByAgent.values()].filter((status) => status === "failed").length,
     eventCount: events.length,
-    runStatus: deriveRunStatus(events)
+    runStatus: deriveRunStatus(events),
+    agentProfiles
   };
 }
 
-function publishNexusAgents(events) {
-  const summary = deriveNexusSummary(events);
+function publishNexusAgents(events, personas, agentSummary) {
+  const summary = deriveNexusSummary(events, personas, agentSummary);
   window.dispatchEvent(
     new CustomEvent("nexus:agents", {
       detail: summary
@@ -71,11 +251,14 @@ function publishNexusAgents(events) {
   );
 }
 
-function buildDashboard(events) {
+function buildDashboard(events, personas, agentSummary) {
   const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const totalActions = sorted.filter((event) => event.eventType.startsWith("action.")).length;
-  const totalAgents = new Set(sorted.filter((event) => event.agentId).map((event) => event.agentId)).size;
-  const statusByAgent = new Map();
+  const agents = Array.isArray(agentSummary?.agents) ? agentSummary.agents : [];
+  const eventAgentCount = new Set(sorted.filter((event) => event.agentId).map((event) => event.agentId)).size;
+  const totalAgents = agentSummary?.run?.requestedAgentCount || agents.length || eventAgentCount;
+  const agentProfiles = buildAgentProfiles(sorted, personas, agents);
+  const statusByAgent = deriveAgentStatusById(sorted, agents);
   const actionCountByAgent = new Map();
   const lastEventByAgent = new Map();
 
@@ -85,25 +268,30 @@ function buildDashboard(events) {
     if (event.eventType.startsWith("action.")) {
       actionCountByAgent.set(event.agentId, (actionCountByAgent.get(event.agentId) || 0) + 1);
     }
-    if (event.eventType === "agent.started") statusByAgent.set(event.agentId, "active");
-    if (event.eventType === "agent.completed") statusByAgent.set(event.agentId, "completed");
-    if (event.eventType === "agent.failed") statusByAgent.set(event.agentId, "failed");
-    if (event.eventType === "agent.cancelled") statusByAgent.set(event.agentId, "cancelled");
   }
 
-  const agentRows = [...new Set([...statusByAgent.keys(), ...actionCountByAgent.keys(), ...lastEventByAgent.keys()])]
+  const statusSort = { active: 0, pending: 1, failed: 2, cancelled: 3, completed: 4 };
+  const agentRows = [...new Set([...(agents || []).map((agent) => agent.id), ...statusByAgent.keys(), ...actionCountByAgent.keys(), ...lastEventByAgent.keys()])]
+    .filter(Boolean)
     .map((agentId) => ({
       agentId,
+      identity: agentProfiles[agentId],
       status: statusByAgent.get(agentId) || "pending",
       actions: actionCountByAgent.get(agentId) || 0,
       lastEventType: lastEventByAgent.get(agentId)?.eventType || "No events yet",
       lastUpdatedAt: lastEventByAgent.get(agentId)?.timestamp || null
     }))
-    .sort((left, right) => left.agentId.localeCompare(right.agentId));
+    .sort((left, right) => {
+      const leftSort = statusSort[left.status] ?? 9;
+      const rightSort = statusSort[right.status] ?? 9;
+      if (leftSort !== rightSort) return leftSort - rightSort;
+      return (left.identity?.displayName || left.agentId).localeCompare(right.identity?.displayName || right.agentId);
+    });
 
   const completedAgents = agentRows.filter((row) => row.status === "completed").length;
   const failedAgents = agentRows.filter((row) => row.status === "failed").length;
   const activeAgents = agentRows.filter((row) => row.status === "active").length;
+  const queuedAgents = agentRows.filter((row) => row.status === "pending").length;
 
   const recentErrors = sorted
     .filter(
@@ -143,11 +331,12 @@ function buildDashboard(events) {
       : null;
 
   return {
-    runStatus: deriveRunStatus(sorted),
+    runStatus: formatRunStatus(agentSummary?.run?.status) || deriveRunStatus(sorted),
     cards: {
       totalActions,
       totalAgents,
       activeAgents,
+      queuedAgents,
       completedAgents,
       failedAgents,
       errorsFound: recentErrors.length,
@@ -157,7 +346,8 @@ function buildDashboard(events) {
     agentRows,
     eventDistribution,
     recentErrors,
-    liveEvents: [...sorted].reverse().slice(0, 80)
+    liveEvents: [...sorted].reverse().slice(0, 80),
+    agentProfiles
   };
 }
 
@@ -171,6 +361,7 @@ async function fetchJson(url) {
 
 function useRunData(config) {
   const [events, setEvents] = React.useState(Array.isArray(config.initialEvents) ? [...config.initialEvents] : []);
+  const [agentSummary, setAgentSummary] = React.useState(config.initialAgentSummary || null);
   const [artifacts, setArtifacts] = React.useState(Array.isArray(config.initialArtifacts) ? [...config.initialArtifacts] : []);
   const [findings, setFindings] = React.useState(Array.isArray(config.initialFindings) ? [...config.initialFindings] : []);
   const [budgetSummary, setBudgetSummary] = React.useState(null);
@@ -181,6 +372,16 @@ function useRunData(config) {
   React.useEffect(() => {
     let mounted = true;
     const socket = io(config.apiBaseUrl, { withCredentials: true, reconnection: true });
+
+    async function refreshAgentSummary() {
+      try {
+        const payload = await fetchJson(`${config.apiBaseUrl}/api/runs/${config.runId}/agents`);
+        if (!mounted) return;
+        setAgentSummary(payload || null);
+      } catch {
+        // keep current agent summary
+      }
+    }
 
     async function refreshArtifacts() {
       try {
@@ -237,6 +438,9 @@ function useRunData(config) {
         void refreshArtifacts();
         void refreshFindings();
       }
+      if (event.eventType.startsWith("agent.") || event.eventType.startsWith("run.")) {
+        void refreshAgentSummary();
+      }
     };
 
     socket.on("connect", () => {
@@ -247,6 +451,7 @@ function useRunData(config) {
       setStatus("Live feed reconnected");
       socket.emit("subscribe", { channel: `run:${config.runId}` });
       void refreshEvents();
+      void refreshAgentSummary();
       void refreshArtifacts();
       void refreshFindings();
     });
@@ -258,10 +463,14 @@ function useRunData(config) {
     socket.on("event.created", onEvent);
 
     void refreshEvents();
+    void refreshAgentSummary();
     void refreshArtifacts();
     void refreshFindings();
     void refreshBudgetSummary();
 
+    const agentsTimer = window.setInterval(() => {
+      void refreshAgentSummary();
+    }, 4000);
     const budgetTimer = window.setInterval(() => {
       void refreshBudgetSummary();
     }, 5000);
@@ -271,6 +480,7 @@ function useRunData(config) {
 
     return () => {
       mounted = false;
+      window.clearInterval(agentsTimer);
       window.clearInterval(budgetTimer);
       window.clearInterval(findingsTimer);
       socket.off("event.created", onEvent);
@@ -278,7 +488,7 @@ function useRunData(config) {
     };
   }, [config.apiBaseUrl, config.runId]);
 
-  return { events, artifacts, findings, budgetSummary, loading, error };
+  return { events, agentSummary, artifacts, findings, budgetSummary, loading, error };
 }
 
 function MetricCard({ title, value, subtitle, tone }) {
@@ -307,13 +517,14 @@ function EmptyState({ title, body }) {
 }
 
 function DashboardApp({ config }) {
-  const { events, artifacts, findings, budgetSummary, loading, error } = useRunData(config);
-  const dashboard = React.useMemo(() => buildDashboard(events), [events]);
+  const { events, agentSummary, artifacts, findings, budgetSummary, loading, error } = useRunData(config);
+  const personas = Array.isArray(config.personas) ? config.personas : [];
+  const dashboard = React.useMemo(() => buildDashboard(events, personas, agentSummary), [events, personas, agentSummary]);
   const rc = Recharts;
 
   React.useEffect(() => {
-    publishNexusAgents(events);
-  }, [events]);
+    publishNexusAgents(events, personas, agentSummary);
+  }, [events, personas, agentSummary]);
 
   const [selectedAgentId, setSelectedAgentId] = React.useState(null);
   React.useEffect(() => {
@@ -338,6 +549,7 @@ function DashboardApp({ config }) {
         .slice()
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     : [];
+  const selectedAgentProfile = agentProfileFor(selectedAgentId, dashboard.agentProfiles);
 
   const latestMarkdownReport = artifacts
     .filter((artifact) => artifact.type === "REPORT")
@@ -418,9 +630,10 @@ function DashboardApp({ config }) {
       "div",
       { className: "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" },
       React.createElement(MetricCard, { title: "Run Status", value: dashboard.runStatus, subtitle: "derived from live run events", tone: dashboard.runStatus === "Failed" ? "danger" : "success" }),
-      React.createElement(MetricCard, { title: "Agents Seen", value: String(cards.totalAgents), subtitle: "agent events received" }),
-      React.createElement(MetricCard, { title: "Active Agents", value: String(cards.activeAgents), subtitle: "currently running" }),
-      React.createElement(MetricCard, { title: "Completed Agents", value: String(cards.completedAgents), subtitle: "agent.completed" }),
+      React.createElement(MetricCard, { title: "Run Population", value: String(cards.totalAgents), subtitle: "agents requested for this run" }),
+      React.createElement(MetricCard, { title: "Live Now", value: String(cards.activeAgents), subtitle: "running worker slots" }),
+      React.createElement(MetricCard, { title: "Queued", value: String(cards.queuedAgents), subtitle: "waiting for a worker slot" }),
+      React.createElement(MetricCard, { title: "Completed", value: String(cards.completedAgents), subtitle: "finished agents" }),
       React.createElement(MetricCard, { title: "Failed Agents", value: String(cards.failedAgents), subtitle: "agent.failed", tone: cards.failedAgents > 0 ? "danger" : "default" }),
       React.createElement(MetricCard, { title: "Total Actions", value: String(cards.totalActions), subtitle: "action.* events" }),
       React.createElement(MetricCard, { title: "Avg Action Time", value: avgCompletionLabel, subtitle: "from action durationMs" }),
@@ -477,20 +690,29 @@ function DashboardApp({ config }) {
                         },
                         React.createElement(
                           "td",
-                          { className: "py-2" },
+                          { className: "py-2", "data-label": "Agent" },
                           React.createElement(
                             "button",
                             {
                               type: "button",
-                              className: "rounded-md bg-transparent px-0 py-0 text-left font-mono text-xs text-slate-700 hover:text-teal-700",
+                              className: "rounded-md bg-transparent px-0 py-0 text-left text-slate-700 hover:text-teal-700",
                               onClick: () => setSelectedAgentId(row.agentId)
                             },
-                            row.agentId
+                            React.createElement(
+                              "span",
+                              { className: "flex flex-wrap items-center gap-2" },
+                              React.createElement("span", { className: "text-sm font-semibold text-slate-900" }, row.identity?.displayName || row.agentId),
+                              row.identity
+                                ? React.createElement("span", { className: "rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800" }, row.identity.powerLabel)
+                                : null
+                            ),
+                            React.createElement("span", { className: "mt-1 block text-xs text-slate-500" }, row.identity?.subtitle || "Synthetic agent"),
+                            React.createElement("span", { className: "mt-1 block font-mono text-[11px] text-slate-500" }, row.identity ? `id ${row.identity.agentId.slice(0, 8)}` : row.agentId)
                           )
                         ),
-                        React.createElement("td", { className: "py-2 capitalize text-slate-700" }, row.status),
-                        React.createElement("td", { className: "py-2 text-slate-700" }, String(row.actions)),
-                        React.createElement("td", { className: "py-2 text-slate-500" }, row.lastEventType)
+                        React.createElement("td", { className: "py-2 capitalize text-slate-700", "data-label": "Status" }, agentStatusLabel(row.status)),
+                        React.createElement("td", { className: "py-2 text-slate-700", "data-label": "Actions" }, String(row.actions)),
+                        React.createElement("td", { className: "py-2 text-slate-500", "data-label": "Last event" }, row.lastEventType)
                       )
                     )
               )
@@ -507,8 +729,46 @@ function DashboardApp({ config }) {
                     "div",
                     { className: "rounded-xl border border-slate-200 bg-slate-50 p-3" },
                     React.createElement("p", { className: "text-xs uppercase tracking-wide text-slate-500" }, "Selected agent"),
-                    React.createElement("p", { className: "mt-1 font-mono text-sm text-slate-800" }, selectedAgentId),
-                    React.createElement("p", { className: "mt-1 text-xs text-slate-500" }, `${selectedAgentEvents.length} events · ${selectedAgentArtifacts.length} artifacts`)
+                    React.createElement("div", { className: "mt-2 flex flex-wrap items-start justify-between gap-3" },
+                      React.createElement(
+                        "div",
+                        null,
+                        React.createElement("p", { className: "text-lg font-semibold text-slate-900" }, selectedAgentProfile?.displayName || selectedAgentId),
+                        React.createElement("p", { className: "mt-1 text-xs text-slate-500" }, selectedAgentProfile?.subtitle || "Synthetic agent"),
+                        selectedAgentProfile?.accountLabel
+                          ? React.createElement("p", { className: "mt-1 text-xs text-slate-500" }, selectedAgentProfile.accountLabel)
+                          : null,
+                        React.createElement("p", { className: "mt-1 font-mono text-[11px] text-slate-500" }, selectedAgentId)
+                      ),
+                      React.createElement(
+                        "div",
+                        { className: "min-w-[92px] rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-right" },
+                        React.createElement("p", { className: "text-[10px] uppercase tracking-wide text-emerald-800" }, "Power"),
+                        React.createElement("p", { className: "text-xl font-semibold text-emerald-900" }, selectedAgentProfile?.powerLabel || "PL??")
+                      )
+                    ),
+                    selectedAgentProfile
+                      ? React.createElement(
+                          "div",
+                          { className: "mt-3" },
+                          React.createElement(
+                            "div",
+                            { className: "h-2 overflow-hidden rounded-full bg-slate-900/30" },
+                            React.createElement("div", {
+                              className: "h-full rounded-full bg-emerald-400",
+                              style: { width: `${selectedAgentProfile.powerLevel}%` }
+                            })
+                          ),
+                          React.createElement(
+                            "div",
+                            { className: "mt-3 flex flex-wrap gap-2" },
+                            selectedAgentProfile.tags.map((tag) =>
+                              React.createElement("span", { key: tag, className: "rounded bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700" }, tag)
+                            )
+                          )
+                        )
+                      : null,
+                    React.createElement("p", { className: "mt-3 text-xs text-slate-500" }, `${selectedAgentEvents.length} events - ${selectedAgentArtifacts.length} artifacts`)
                   ),
                   React.createElement(
                     "div",
@@ -596,25 +856,33 @@ function DashboardApp({ config }) {
           { className: "mt-3 max-h-[360px] overflow-y-auto" },
           dashboard.liveEvents.length === 0
             ? React.createElement(EmptyState, { title: "No events yet", body: "The event stream will populate here once the run starts emitting activity." })
-            : dashboard.liveEvents.map((event) =>
-                React.createElement(
+            : dashboard.liveEvents.map((event) => {
+                const eventProfile = agentProfileFor(event.agentId, dashboard.agentProfiles);
+                return React.createElement(
                   "div",
                   { key: event.id, className: "mb-2 rounded-lg border border-slate-200 p-3" },
                   React.createElement(
                     "div",
                     { className: "flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500" },
                     React.createElement("span", null, new Date(event.timestamp).toLocaleString()),
-                    React.createElement("span", { className: "font-mono text-[11px]" }, event.agentId || "run")
+                    React.createElement(
+                      "span",
+                      { className: eventProfile ? "text-xs font-semibold text-slate-700" : "font-mono text-[11px]" },
+                      eventProfile ? eventProfile.displayName : event.agentId || "run"
+                    )
                   ),
                   React.createElement(
                     "div",
-                    { className: "mt-1 flex items-center gap-2" },
+                    { className: "mt-1 flex flex-wrap items-center gap-2" },
                     React.createElement("span", { className: "rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700" }, event.eventType),
-                    React.createElement("span", { className: "text-xs text-slate-500" }, event.severity)
+                    React.createElement("span", { className: "text-xs text-slate-500" }, event.severity),
+                    eventProfile
+                      ? React.createElement("span", { className: "rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800" }, eventProfile.powerLabel)
+                      : null
                   ),
                   React.createElement("p", { className: "mt-2 text-sm text-slate-700" }, shortSummary(event))
-                )
-              )
+                );
+              })
         )
       ),
       React.createElement(

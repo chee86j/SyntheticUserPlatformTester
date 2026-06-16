@@ -3,6 +3,7 @@ import { isAllowedUrl } from "@synthetic/shared";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "./config.js";
 import type { ScriptedAction } from "./actions.js";
+import { blockedRequestPayload, isIgnorableConsoleError } from "./browser-event-filters.js";
 
 export class ProductWorkflowError extends Error {
   constructor(message: string) {
@@ -51,18 +52,19 @@ export async function executeScriptedWorkflow(input: {
         : undefined
     );
 
-    await applyNetworkRestrictions(context, input.allowedDomains, input.baseUrl);
+    await applyNetworkRestrictions(context, input.allowedDomains, input.baseUrl, input.emit);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
     const page = await context.newPage();
     page.setDefaultTimeout(env.RUNNER_NAV_TIMEOUT_MS);
 
     page.on("console", async (message) => {
-      if (message.type() === "error") {
+      const text = message.text();
+      if (message.type() === "error" && !isIgnorableConsoleError(text)) {
         await input.emit({
           eventType: "console.error",
           severity: "ERROR",
-          payload: { message: message.text() }
+          payload: { message: text }
         });
       }
     });
@@ -150,12 +152,33 @@ export async function executeScriptedWorkflow(input: {
   }
 }
 
-async function applyNetworkRestrictions(context: BrowserContext, allowedDomains: string[], baseUrl: string): Promise<void> {
+async function applyNetworkRestrictions(
+  context: BrowserContext,
+  allowedDomains: string[],
+  baseUrl: string,
+  emit: EmitFn
+): Promise<void> {
+  const reportedBlockedUrls = new Set<string>();
+
   await context.route("**/*", async (route) => {
-    const url = route.request().url();
+    const request = route.request();
+    const url = request.url();
     if (isAllowedUrl({ url, allowedDomains, baseUrl })) {
       await route.continue();
       return;
+    }
+
+    if (!reportedBlockedUrls.has(url)) {
+      reportedBlockedUrls.add(url);
+      await emit({
+        eventType: "network.failed",
+        severity: "WARNING",
+        payload: blockedRequestPayload({
+          url,
+          method: request.method(),
+          resourceType: request.resourceType()
+        })
+      });
     }
 
     await route.abort("blockedbyclient");

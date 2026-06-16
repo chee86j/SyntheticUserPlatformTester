@@ -116,11 +116,26 @@ function mountNexusScene(container) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(width, height);
   renderer.setClearColor(0x000000, 0);
+  container.style.position = container.style.position || "relative";
   container.appendChild(renderer.domElement);
+
+  const tooltip = document.createElement("div");
+  tooltip.style.cssText =
+    "position:absolute;z-index:4;max-width:240px;padding:10px 12px;border:1px solid rgba(57,255,136,0.32);border-radius:6px;background:rgba(0,8,5,0.92);box-shadow:0 16px 40px rgba(0,0,0,0.36);color:#e9fff3;font:12px/1.35 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:none;opacity:0;transform:translate3d(0,0,0);transition:opacity 120ms ease;";
+  const tooltipName = document.createElement("div");
+  tooltipName.style.cssText = "font-weight:700;color:#f0fff5;";
+  const tooltipMeta = document.createElement("div");
+  tooltipMeta.style.cssText = "margin-top:3px;color:#86a996;";
+  const tooltipTags = document.createElement("div");
+  tooltipTags.style.cssText = "margin-top:6px;color:#39ff88;";
+  tooltip.append(tooltipName, tooltipMeta, tooltipTags);
+  container.appendChild(tooltip);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100);
   camera.position.set(0, 0, 6.1);
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
 
   const root = new THREE.Group();
   scene.add(root);
@@ -178,6 +193,7 @@ function mountNexusScene(container) {
   let lastX = 0;
   let lastY = 0;
   let activeAgents = [];
+  let activeAgentProfiles = {};
   let activeAgentNodeIndices = new Map();
 
   function nodeIndexForAgent(agentId, usedIndices) {
@@ -197,6 +213,7 @@ function mountNexusScene(container) {
       : hasRunConfig
         ? activeAgents.length
         : activeAgents.length || live;
+    const queuedCount = Number.isFinite(summary?.queuedAgentsCount) ? summary.queuedAgentsCount : 0;
     const signalCount = Number.isFinite(summary?.eventCount) ? summary.eventCount : 0;
 
     for (const element of document.querySelectorAll("[data-nexus-connected-value]")) {
@@ -210,16 +227,23 @@ function mountNexusScene(container) {
     }
 
     container.dataset.activeAgents = String(activeCount);
+    container.dataset.queuedAgents = String(queuedCount);
     container.setAttribute(
       "aria-label",
-      `Nexus network: ${totalAgents} connected people, ${activeCount} live now. ${activeAgents.length} running agents are highlighted with stable unique colors.`
+      `Nexus network: ${totalAgents} connected agents, ${activeCount} running now, ${queuedCount} queued. Running agents are highlighted with stable unique colors.`
     );
   }
 
   function updateAgentNodes(nextActiveAgents, summary = {}) {
-    activeAgents = Array.isArray(nextActiveAgents) ? nextActiveAgents.filter(Boolean) : [];
+    activeAgents = Array.isArray(nextActiveAgents)
+      ? nextActiveAgents
+          .map((agent) => (typeof agent === "string" ? agent : agent?.agentId))
+          .filter(Boolean)
+      : [];
+    activeAgentProfiles = summary?.agentProfiles && typeof summary.agentProfiles === "object" ? summary.agentProfiles : {};
     activeAgentNodeIndices = new Map();
     const usedIndices = new Set();
+    hideTooltip();
 
     for (const marker of activeMarkers.children) {
       marker.geometry.dispose();
@@ -257,6 +281,7 @@ function mountNexusScene(container) {
       );
       marker.position.copy(positions[nodeIndex].clone().multiplyScalar(1.01));
       marker.userData.agentId = agentId;
+      marker.userData.agentProfile = activeAgentProfiles[agentId] || null;
       marker.userData.baseScale = 1;
       marker.userData.baseOpacity = 0.95;
       marker.userData.phase = (hashString(agentId) % 628) / 100;
@@ -276,6 +301,7 @@ function mountNexusScene(container) {
       );
       glow.position.copy(marker.position);
       glow.userData.agentId = agentId;
+      glow.userData.agentProfile = activeAgentProfiles[agentId] || null;
       glow.userData.baseScale = 1;
       glow.userData.baseOpacity = 0.18;
       glow.userData.phase = marker.userData.phase;
@@ -286,6 +312,47 @@ function mountNexusScene(container) {
     nodes.instanceColor.needsUpdate = true;
     nodes.instanceMatrix.needsUpdate = true;
     updateNexusCounters(summary);
+  }
+
+  function hideTooltip() {
+    tooltip.style.opacity = "0";
+  }
+
+  function showTooltip(event, marker) {
+    const profile = marker.userData.agentProfile || {};
+    const agentId = marker.userData.agentId || "";
+    const rect = container.getBoundingClientRect();
+    const maxX = Math.max(10, rect.width - 250);
+    const maxY = Math.max(10, rect.height - 90);
+    const x = Math.min(maxX, Math.max(10, event.clientX - rect.left + 14));
+    const y = Math.min(maxY, Math.max(10, event.clientY - rect.top + 14));
+    tooltipName.textContent = profile.displayName || `Agent ${agentId.slice(0, 8)}`;
+    tooltipMeta.textContent = profile.powerLevel
+      ? `${profile.powerLabel || `PL${profile.powerLevel}`} | ${profile.subtitle || "Synthetic agent"}`
+      : profile.subtitle || "Synthetic agent";
+    tooltipTags.textContent = Array.isArray(profile.tags) ? profile.tags.slice(0, 3).join(" / ") : "";
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+    tooltip.style.opacity = "1";
+  }
+
+  function updateHover(event) {
+    if (dragging) {
+      hideTooltip();
+      return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+    raycaster.setFromCamera(pointer, camera);
+    const markerObjects = activeMarkers.children.filter((marker) => marker.userData.kind === "marker");
+    const hits = raycaster.intersectObjects(markerObjects, false);
+    if (hits.length > 0) {
+      showTooltip(event, hits[0].object);
+    } else {
+      hideTooltip();
+    }
   }
 
   function addArc() {
@@ -323,6 +390,7 @@ function mountNexusScene(container) {
     root.rotation.x = Math.max(-0.9, Math.min(0.9, root.rotation.x));
     lastX = event.clientX;
     lastY = event.clientY;
+    hideTooltip();
   };
 
   const onPointerUp = (event) => {
@@ -332,8 +400,10 @@ function mountNexusScene(container) {
 
   container.addEventListener("pointerdown", onPointerDown);
   container.addEventListener("pointermove", onPointerMove);
+  container.addEventListener("pointermove", updateHover);
   container.addEventListener("pointerup", onPointerUp);
   container.addEventListener("pointercancel", onPointerUp);
+  container.addEventListener("pointerleave", hideTooltip);
 
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);

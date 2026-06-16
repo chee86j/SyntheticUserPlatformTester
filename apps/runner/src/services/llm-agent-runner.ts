@@ -2,6 +2,7 @@ import path from "node:path";
 import { isAllowedUrl } from "@synthetic/shared";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "../lib/config.js";
+import { blockedRequestPayload, isIgnorableConsoleError } from "../lib/browser-event-filters.js";
 import { AgentMemoryService } from "./agent-memory-service.js";
 import { AgentPromptBuilder } from "./agent-prompt-builder.js";
 import { LlmActionParser, type LlmAction } from "./llm-action-parser.js";
@@ -336,11 +337,26 @@ export async function runSingleLlmAgent(input: {
         : undefined
     );
 
+    const reportedBlockedUrls = new Set<string>();
     await context.route("**/*", async (route) => {
-      const url = route.request().url();
+      const request = route.request();
+      const url = request.url();
       if (isAllowedUrl({ url, allowedDomains: input.allowedDomains, baseUrl: input.baseUrl })) {
         await route.continue();
         return;
+      }
+
+      if (!reportedBlockedUrls.has(url)) {
+        reportedBlockedUrls.add(url);
+        await input.emit({
+          eventType: "network.failed",
+          severity: "WARNING",
+          payload: blockedRequestPayload({
+            url,
+            method: request.method(),
+            resourceType: request.resourceType()
+          })
+        });
       }
 
       await route.abort("blockedbyclient");
@@ -351,8 +367,9 @@ export async function runSingleLlmAgent(input: {
     page.setDefaultTimeout(env.RUNNER_NAV_TIMEOUT_MS);
 
     page.on("console", async (message) => {
-      if (message.type() === "error") {
-        await input.emit({ eventType: "console.error", severity: "ERROR", payload: { message: message.text() } });
+      const text = message.text();
+      if (message.type() === "error" && !isIgnorableConsoleError(text)) {
+        await input.emit({ eventType: "console.error", severity: "ERROR", payload: { message: text } });
       }
     });
 

@@ -678,6 +678,17 @@ protectedRouter.post("/environments/:environmentId/test-accounts/import", requir
   }
 });
 
+protectedRouter.delete("/environments/:environmentId/test-accounts/delete-all", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const envParsed = z.object({ environmentId: z.string().uuid() }).safeParse(req.params);
+  if (!envParsed.success) return void res.status(400).json({ error: "Invalid environment id" });
+
+  const result = await testAccountRepository.deleteAllForEnvironment(envParsed.data.environmentId, user.organizationId);
+  res.json({ success: true, count: result.count });
+});
+
 protectedRouter.patch("/environments/:environmentId/test-accounts/:accountId", requireRole("OWNER", "ADMIN"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -1371,6 +1382,94 @@ protectedRouter.post("/demo-runs/20-agent", requireRole("OWNER", "ADMIN", "TESTE
   res.status(201).json({ run, agentsCreated: agentRecords.length });
 });
 
+const customAgentRunSchema = z.object({
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  workflowId: z.string().uuid().optional(),
+  agentCount: z.number().int().min(1).max(100),
+  testAccountIds: z.array(z.string().uuid()).min(1)
+});
+
+protectedRouter.post("/demo-runs/custom-agent", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = customAgentRunSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid custom agent run payload" });
+
+  const projects = await projectRepository.listByOrganization(user.organizationId);
+  const project = parsed.data.projectId
+    ? projects.find((item) => item.id === parsed.data.projectId)
+    : projects[0];
+  if (!project) return void res.status(400).json({ error: "No project found for custom run" });
+
+  const environment = parsed.data.environmentId
+    ? (project.environments ?? []).find((item) => item.id === parsed.data.environmentId)
+    : (project.environments ?? [])[0];
+  if (!environment) return void res.status(400).json({ error: "No environment found for custom run" });
+
+  const workflows = await workflowRepository.listByProjectForOrganization(project.id, user.organizationId);
+  const workflow = parsed.data.workflowId
+    ? workflows.find((item) => item.id === parsed.data.workflowId && item.status === "ACTIVE")
+    : workflows.find((item) => item.status === "ACTIVE");
+  if (!workflow) return void res.status(400).json({ error: "No ACTIVE workflow found for custom run" });
+
+  const personas = await personaRepository.listByOrganization(user.organizationId);
+  if (personas.length === 0) return void res.status(400).json({ error: "No personas found for custom run" });
+
+  const selectedAccounts = await testAccountRepository.listByIdsForOrganization(
+    parsed.data.testAccountIds,
+    user.organizationId
+  );
+
+  if (selectedAccounts.length === 0) return void res.status(400).json({ error: "No valid test accounts provided" });
+
+  const agentCount = Math.min(parsed.data.agentCount, selectedAccounts.length);
+  const personasForAgents = personas.slice(0, agentCount).map((p) => p.id);
+  const assignedPersonaIds = Array.from({ length: agentCount }, (_, index) =>
+    personasForAgents[index % personasForAgents.length]
+  );
+
+  const run = await runRepository.createPending({
+    organizationId: user.organizationId,
+    projectId: project.id,
+    environmentId: environment.id,
+    workflowId: workflow.id,
+    createdByUserId: user.id,
+    selectedPersonaIds: assignedPersonaIds,
+    selectedTestAccountIds: selectedAccounts.slice(0, agentCount).map((account) => account.id),
+    requestedAgentCount: agentCount,
+    maxRunDurationSeconds: 600
+  });
+
+  await runRepository.updateStatus(run.id, RunStatus.RUNNING);
+  const runStartedEvent = await eventRepository.create({
+    organizationId: user.organizationId,
+    runId: run.id,
+    eventType: "run.started",
+    payload: { preset: "custom-agent-demo", requestedAgents: agentCount }
+  });
+  emitRunEvent(run.id, runStartedEvent);
+
+  const agentRecords = [];
+  for (let index = 0; index < agentCount; index += 1) {
+    const agent = await runRepository.createAgent({
+      simulationRunId: run.id,
+      personaId: assignedPersonaIds[index],
+      testAccountId: selectedAccounts[index].id,
+      status: "IDLE",
+      startedAt: null
+    });
+    agentRecords.push(agent);
+  }
+
+  await Promise.all(
+    agentRecords.map((agent) => enqueueAgentJob({ runId: run.id, agentId: agent.id }))
+  );
+
+  res.status(201).json({ run, agentsCreated: agentRecords.length });
+});
+
 protectedRouter.post("/simulation-runs", requireRole("OWNER", "ADMIN", "TESTER"), async (req: AuthenticatedRequest, res) => {
   const user = req.user;
   if (!user) return void res.status(401).json({ error: "Unauthorized" });
@@ -1552,6 +1651,31 @@ protectedRouter.get("/runs/:runId/events", async (req: AuthenticatedRequest, res
       ...event,
       payload: redactEventPayload(asRecord(event.payload))
     }))
+  });
+});
+
+protectedRouter.get("/runs/:runId/agents", async (req: AuthenticatedRequest, res) => {
+  const user = req.user;
+  if (!user) return void res.status(401).json({ error: "Unauthorized" });
+
+  const params = runIdParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid run id" });
+
+  const run = await runRepository.getById(params.data.runId);
+  if (!run || run.organizationId !== user.organizationId) {
+    return void res.status(404).json({ error: "Run not found" });
+  }
+
+  const agents = await runRepository.listAgentsByRun(params.data.runId);
+  res.json({
+    run: {
+      id: run.id,
+      status: run.status,
+      requestedAgentCount: run.requestedAgentCount,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt
+    },
+    agents
   });
 });
 
