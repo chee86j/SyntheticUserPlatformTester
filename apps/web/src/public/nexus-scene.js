@@ -1,3 +1,5 @@
+/* global window, document, ResizeObserver */
+
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -61,10 +63,15 @@ function colorForAgent(agentId) {
   return color;
 }
 
-function deriveActiveAgentsFromEvents(events) {
+function deriveActiveAgentsFromEvents(events, agents = []) {
   if (!Array.isArray(events)) return [];
   const statusByAgent = new Map();
   const sorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  for (const agent of Array.isArray(agents) ? agents : []) {
+    if (!agent?.id) continue;
+    statusByAgent.set(agent.id, normalizeAgentStatus(agent.status));
+  }
 
   for (const event of sorted) {
     if (!event || !event.agentId) continue;
@@ -105,10 +112,41 @@ function makeArc(start, end, color) {
   return line;
 }
 
+function toPositiveInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+}
+
+function normalizeAgentStatus(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "RUNNING") return "active";
+  if (normalized === "COMPLETED") return "completed";
+  if (normalized === "FAILED") return "failed";
+  if (normalized === "CANCELED" || normalized === "CANCELLED") return "cancelled";
+  return "pending";
+}
+
+function runAgentCountFromConfig(config) {
+  if (!config) return null;
+
+  const agents = Array.isArray(config.initialAgentSummary?.agents) ? config.initialAgentSummary.agents : [];
+  const requested = toPositiveInteger(config.initialAgentSummary?.run?.requestedAgentCount);
+  if (requested) return requested;
+  if (agents.length > 0) return agents.length;
+
+  const events = Array.isArray(config.initialEvents) ? config.initialEvents : [];
+  const eventAgentCount = new Set(events.filter((event) => event?.agentId).map((event) => event.agentId)).size;
+  return eventAgentCount > 0 ? eventAgentCount : null;
+}
+
 function mountNexusScene(container) {
-  const connected = Number(container.dataset.connected || "128");
-  const live = Number(container.dataset.live || "24");
-  const nodeCount = Math.max(42, Math.min(220, connected));
+  const runConfig = window.__RUN_EVENTS_CONFIG__;
+  const connected = toPositiveInteger(container.dataset.connected) || 128;
+  const live = toPositiveInteger(container.dataset.live) || 24;
+  const runAgentCount = runAgentCountFromConfig(runConfig);
+  const nodeCount = runConfig
+    ? Math.max(1, Math.min(220, runAgentCount || connected))
+    : Math.max(42, Math.min(220, connected));
   const width = container.clientWidth || 800;
   const height = container.clientHeight || 520;
 
@@ -195,11 +233,16 @@ function mountNexusScene(container) {
   let activeAgents = [];
   let activeAgentProfiles = {};
   let activeAgentNodeIndices = new Map();
+  container.dataset.nodeCount = String(nodeCount);
 
   function nodeIndexForAgent(agentId, usedIndices) {
+    if (usedIndices.size >= nodeCount) return null;
     let nodeIndex = hashString(agentId) % nodeCount;
+    let attempts = 0;
     while (usedIndices.has(nodeIndex)) {
       nodeIndex = (nodeIndex + 1) % nodeCount;
+      attempts += 1;
+      if (attempts >= nodeCount) return null;
     }
     usedIndices.add(nodeIndex);
     return nodeIndex;
@@ -208,10 +251,10 @@ function mountNexusScene(container) {
   function updateNexusCounters(summary) {
     const hasRunConfig = Boolean(window.__RUN_EVENTS_CONFIG__);
     const totalAgents = Number.isFinite(summary?.totalAgents) ? summary.totalAgents : connected;
-    const activeCount = Number.isFinite(summary?.activeAgentsCount)
-      ? summary.activeAgentsCount
-      : hasRunConfig
-        ? activeAgents.length
+    const activeCount = hasRunConfig
+      ? activeAgents.length
+      : Number.isFinite(summary?.activeAgentsCount)
+        ? summary.activeAgentsCount
         : activeAgents.length || live;
     const queuedCount = Number.isFinite(summary?.queuedAgentsCount) ? summary.queuedAgentsCount : 0;
     const signalCount = Number.isFinite(summary?.eventCount) ? summary.eventCount : 0;
@@ -228,6 +271,7 @@ function mountNexusScene(container) {
 
     container.dataset.activeAgents = String(activeCount);
     container.dataset.queuedAgents = String(queuedCount);
+    container.dataset.runningNodeCount = String(activeAgents.length);
     container.setAttribute(
       "aria-label",
       `Nexus network: ${totalAgents} connected agents, ${activeCount} running now, ${queuedCount} queued. Running agents are highlighted with stable unique colors.`
@@ -261,12 +305,14 @@ function mountNexusScene(container) {
 
     activeAgents.forEach((agentId) => {
       const nodeIndex = nodeIndexForAgent(agentId, usedIndices);
+      if (nodeIndex === null) return;
       activeAgentNodeIndices.set(agentId, nodeIndex);
       activeNodeColor.setHex(colorForAgent(agentId));
       dummy.position.copy(positions[nodeIndex]);
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
       nodes.setMatrixAt(nodeIndex, dummy.matrix);
+      nodes.setColorAt(nodeIndex, activeNodeColor);
 
       const marker = new THREE.Mesh(
         new THREE.SphereGeometry(0.072, 18, 18),
@@ -407,7 +453,16 @@ function mountNexusScene(container) {
 
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
-  updateAgentNodes(deriveActiveAgentsFromEvents(window.__RUN_EVENTS_CONFIG__?.initialEvents));
+  updateAgentNodes(
+    deriveActiveAgentsFromEvents(
+      window.__RUN_EVENTS_CONFIG__?.initialEvents,
+      window.__RUN_EVENTS_CONFIG__?.initialAgentSummary?.agents
+    ),
+    {
+      totalAgents: runAgentCount || connected,
+      eventCount: Array.isArray(window.__RUN_EVENTS_CONFIG__?.initialEvents) ? window.__RUN_EVENTS_CONFIG__.initialEvents.length : 0
+    }
+  );
   window.addEventListener("nexus:agents", (event) => {
     updateAgentNodes(event.detail?.activeAgents, event.detail);
   });

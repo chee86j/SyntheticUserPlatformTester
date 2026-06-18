@@ -1,4 +1,4 @@
-/* global window, document, fetch, io, React, ReactDOM, Recharts */
+/* global window, document, fetch, io, React, ReactDOM, Recharts, CustomEvent */
 
 function shortSummary(event) {
   const payload = event && typeof event.payload === "object" && event.payload ? event.payload : {};
